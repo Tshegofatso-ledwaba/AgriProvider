@@ -1,0 +1,196 @@
+import { Platform } from 'react-native';
+
+const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, '');
+export const hasApiBaseUrl = Boolean(apiBaseUrl);
+export const cookieSessionCredential = 'http-only-cookie-session';
+
+type UnauthorizedHandler = () => void | Promise<void>;
+let unauthorizedHandler: UnauthorizedHandler | undefined;
+
+export class ApiError extends Error {
+  constructor(message: string, readonly status?: number, readonly code?: string) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+export function setUnauthorizedHandler(handler: UnauthorizedHandler): () => void {
+  unauthorizedHandler = handler;
+  return () => {
+    if (unauthorizedHandler === handler) {
+      unauthorizedHandler = undefined;
+    }
+  };
+}
+
+export async function requestApi(
+  path: string,
+  options: {
+    method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+    token?: string;
+    authMode?: 'cookie';
+    body?: Record<string, unknown>;
+  } = {},
+): Promise<unknown> {
+  if (!apiBaseUrl) {
+    throw new ApiError('Set EXPO_PUBLIC_API_URL in mobile/.env and restart Expo.');
+  }
+  const cookieSession = Platform.OS === 'web'
+    && (options.authMode === 'cookie' || Boolean(options.token));
+  if (Platform.OS === 'web' && !cookieSession) {
+    throw new ApiError('A secure web session is required for this request. Sign in again.');
+  }
+  if (Platform.OS !== 'web' && options.authMode === 'cookie') {
+    throw new ApiError('Cookie sessions are only available in a web browser.');
+  }
+
+  let response: Response;
+  try {
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (options.body) {
+      headers['Content-Type'] = 'application/json';
+    }
+    if (cookieSession) {
+      headers['X-Auth-Mode'] = 'cookie';
+    } else if (options.token) {
+      headers.Authorization = 'Bearer ' + options.token;
+    }
+
+    response = await fetch(`${apiBaseUrl}${path}`, {
+      method: options.method ?? (options.body ? 'POST' : 'GET'),
+      headers,
+      body: options.body ? JSON.stringify(options.body) : undefined,
+      credentials: cookieSession ? 'include' : 'same-origin',
+    });
+  } catch {
+    throw new ApiError('Could not reach the API. Check the server and your network connection.');
+  }
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok) {
+    if (response.status === 401 && options.token) {
+      await unauthorizedHandler?.();
+    }
+    const message = isRecord(payload) && typeof payload.error === 'string'
+      ? payload.error
+      : 'The API could not complete the request.';
+    const code = isRecord(payload) && typeof payload.code === 'string'
+      ? payload.code
+      : undefined;
+    throw new ApiError(message, response.status, code);
+  }
+
+  return payload;
+}
+
+export type UploadAsset = {
+  uri: string;
+  name: string;
+  mimeType: string;
+};
+
+export async function uploadFile(
+  path: string,
+  token: string,
+  asset: UploadAsset,
+  onProgress: (progress: number) => void,
+): Promise<unknown> {
+  if (!apiBaseUrl) {
+    throw new ApiError('Set EXPO_PUBLIC_API_URL in mobile/.env and restart Expo.');
+  }
+  if (Platform.OS === 'web') {
+    throw new ApiError('Evidence uploads are available in the iOS and Android apps.');
+  }
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData();
+    formData.append('file', {
+      uri: asset.uri,
+      name: asset.name,
+      type: asset.mimeType,
+    } as unknown as Blob);
+
+    xhr.open('POST', `${apiBaseUrl}${path}`);
+    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && event.total > 0) {
+        onProgress(Math.min(1, event.loaded / event.total));
+      }
+    };
+    xhr.onerror = () => reject(new ApiError('Could not reach the API. Check the server and your network connection.'));
+    xhr.ontimeout = () => reject(new ApiError('The upload timed out. Check your connection and retry.'));
+    xhr.onload = () => {
+      let payload: unknown;
+      try {
+        payload = JSON.parse(xhr.responseText);
+      } catch {
+        payload = null;
+      }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        const message = isRecord(payload) && typeof payload.error === 'string'
+          ? payload.error
+          : 'The API could not complete the upload.';
+        const code = isRecord(payload) && typeof payload.code === 'string'
+          ? payload.code
+          : undefined;
+        reject(new ApiError(message, xhr.status, code));
+        return;
+      }
+      resolve(payload);
+    };
+    xhr.send(formData);
+  });
+}
+
+export async function downloadFile(path: string, token: string): Promise<Uint8Array> {
+  if (!apiBaseUrl) {
+    throw new ApiError('Set EXPO_PUBLIC_API_URL in mobile/.env and restart Expo.');
+  }
+  if (Platform.OS === 'web') {
+    throw new ApiError('Evidence downloads are available in the iOS and Android apps.');
+  }
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', `${apiBaseUrl}${path}`);
+    xhr.setRequestHeader('Accept', 'application/octet-stream');
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.responseType = 'arraybuffer';
+    xhr.onerror = () => reject(new ApiError('Could not reach the API. Check the server and your network connection.'));
+    xhr.onload = () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        let payload: unknown;
+        try {
+          payload = JSON.parse(new TextDecoder().decode(xhr.response));
+        } catch {
+          payload = null;
+        }
+        const message = isRecord(payload) && typeof payload.error === 'string'
+          ? payload.error
+          : 'The API could not retrieve this file.';
+        reject(new ApiError(message, xhr.status));
+        return;
+      }
+      resolve(new Uint8Array(xhr.response));
+    };
+    xhr.send();
+  });
+}
+
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+export function apiErrorText(error: unknown) {
+  return error instanceof ApiError
+    ? error.message
+    : 'The request could not be completed. Please try again.';
+}
