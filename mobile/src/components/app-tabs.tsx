@@ -15,7 +15,7 @@ export default function AppTabs() {
       backgroundColor={colors.background}
       indicatorColor={colors.backgroundElement}
       labelStyle={{ selected: { color: colors.text } }}>
-      <NativeTabs.Trigger name="index">
+      <NativeTabs.Trigger name="index" hidden={user?.role === 'learner'}>
         <NativeTabs.Trigger.Label>Dashboard</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
           src={require('@/assets/images/tabIcons/home.png')}
@@ -83,8 +83,48 @@ export default function AppTabs() {
         </NativeTabs.Trigger>
       ) : null}
 
+      {user?.role === 'learner' ? (
+        <NativeTabs.Trigger name="learner">
+          <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Icon
+            src={require('@/assets/images/tabIcons/home.png')}
+            renderingMode="template"
+          />
+        </NativeTabs.Trigger>
+      ) : null}
+
+      {user?.role === 'learner' ? (
+        <NativeTabs.Trigger name="learner/programmes">
+          <NativeTabs.Trigger.Label>Programmes</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Icon
+            src={require('@/assets/images/tabIcons/explore.png')}
+            renderingMode="template"
+          />
+        </NativeTabs.Trigger>
+      ) : null}
+
+      {user?.role === 'learner' ? (
+        <NativeTabs.Trigger name="learner/attendance">
+          <NativeTabs.Trigger.Label>Attendance</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Icon
+            src={require('@/assets/images/tabIcons/explore.png')}
+            renderingMode="template"
+          />
+        </NativeTabs.Trigger>
+      ) : null}
+
+      {user?.role === 'learner' ? (
+        <NativeTabs.Trigger name="learner/evidence">
+          <NativeTabs.Trigger.Label>Evidence</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Icon
+            src={require('@/assets/images/tabIcons/explore.png')}
+            renderingMode="template"
+          />
+        </NativeTabs.Trigger>
+      ) : null}
+
       {user ? (
-        <NativeTabs.Trigger name="explore" hidden>
+        <NativeTabs.Trigger name="explore" hidden={user.role !== 'learner'}>
           <NativeTabs.Trigger.Label>Profile</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon
             src={require('@/assets/images/tabIcons/home.png')}

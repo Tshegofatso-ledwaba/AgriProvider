@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { once } = require('node:events');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { after, before, test } = require('node:test');
 const { createApp } = require('../src/app');
@@ -16,6 +17,10 @@ const { roles, validPassword } = require('../src/auth');
 
 test('administrator is a supported privileged role and not a public registration role', () => {
   assert.equal(roles.has('admin'), true);
+});
+
+test('learner role is available for secure sign-in and protected portal access', async () => {
+  assert.equal(roles.has('learner'), true);
 });
 
 const jwtSecret = 'test-secret-with-more-than-thirty-two-characters';
@@ -49,6 +54,8 @@ const assessorId = randomUUID();
 const assessorBId = randomUUID();
 const adminId = randomUUID();
 const qaId = randomUUID();
+const learnerId = randomUUID();
+const learnerPassword = 'SecureLearnerPass123';
 const evidenceStorage = {
   provider: 'test-storage',
   async save(buffer) {
@@ -72,6 +79,7 @@ for (const [id, role] of [
   [assessorBId, 'assessor'],
   [adminId, 'admin'],
   [qaId, 'qa'],
+  [learnerId, 'learner'],
 ]) {
   users.push({
     id,
@@ -79,6 +87,7 @@ for (const [id, role] of [
     full_name: role,
     role,
     is_active: true,
+    password_hash: role === 'learner' ? bcrypt.hashSync(learnerPassword, 12) : undefined,
   });
 }
 
@@ -94,6 +103,128 @@ const database = {
     if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK'
       || sql.includes('pg_advisory_xact_lock')) {
       return { rows: [], rowCount: 0 };
+    }
+
+    if (sql.includes('FROM learners l')
+      && sql.includes('WHERE l.learner_user_id = $1')) {
+      if (!learnersAvailable) throw new Error('Learner database unavailable');
+      const [learnerUserId, email] = values;
+      const rows = learners
+        .filter((item) => item.learner_user_id === learnerUserId
+          || (!item.learner_user_id && item.email?.toLowerCase() === email.toLowerCase()))
+        .slice(0, 2)
+        .map((item) => ({
+          id: item.id,
+          learner_reference: item.learner_reference,
+          full_name: item.full_name,
+          email: item.email,
+          phone: item.phone,
+        }));
+      return { rows, rowCount: rows.length };
+    }
+
+    if (sql.includes('JOIN users provider ON provider.id = p.provider_user_id')) {
+      if (!learnersAvailable) throw new Error('Learner database unavailable');
+      const [learnerId] = values;
+      const rows = enrolments.filter((item) => item.learner_id === learnerId).map((enrolment) => {
+        const programme = programmes.find((item) => item.id === enrolment.programme_id);
+        const provider = users.find((item) => item.id === programme.provider_user_id);
+        return {
+          id: programme.id,
+          name: programme.name,
+          description: programme.description ?? null,
+          status: enrolment.status,
+          enrolment_id: enrolment.id,
+          enrolled_at: enrolment.created_at,
+          provider_name: provider?.full_name ?? 'Provider',
+        };
+      });
+      return { rows, rowCount: rows.length };
+    }
+
+    if (sql.includes('COUNT(*) FILTER (WHERE a.status =')) {
+      if (!sessionsAvailable) throw new Error('Attendance database unavailable');
+      const [learnerId] = values;
+      const enrolmentIds = new Set(enrolments
+        .filter((item) => item.learner_id === learnerId)
+        .map((item) => item.id));
+      const matching = attendanceRecords.filter((item) => enrolmentIds.has(item.enrolment_id));
+      return {
+        rows: [{
+          recorded: matching.length,
+          present: matching.filter((item) => item.status === 'present').length,
+          absent: matching.filter((item) => item.status === 'absent').length,
+          excused: matching.filter((item) => item.status === 'excused').length,
+        }],
+        rowCount: 1,
+      };
+    }
+
+    if (sql.includes('SELECT a.session_id, s.title, p.name AS programme_name')) {
+      if (!sessionsAvailable) throw new Error('Attendance database unavailable');
+      const [learnerId] = values;
+      const rows = attendanceRecords
+        .filter((item) => enrolments.some((enrolment) => enrolment.id === item.enrolment_id
+          && enrolment.learner_id === learnerId))
+        .map((item) => {
+          const session = trainingSessions.find((value) => value.id === item.session_id);
+          const enrolment = enrolments.find((value) => value.id === item.enrolment_id);
+          const programme = programmes.find((value) => value.id === enrolment.programme_id);
+          return {
+            session_id: item.session_id,
+            title: session.title,
+            programme_name: programme.name,
+            starts_at: session.starts_at,
+            status: item.status,
+            marked_at: item.updated_at,
+          };
+        })
+        .sort((left, right) => right.starts_at.localeCompare(left.starts_at))
+        .slice(0, 10);
+      return { rows, rowCount: rows.length };
+    }
+
+    if (sql.includes('r.title AS requirement_title')
+      && sql.includes('FROM enrolments e')
+      && sql.includes('LEFT JOIN evidence_submissions s')) {
+      if (!evidenceSubmissionsAvailable || !evidenceRequirementsAvailable) {
+        throw new Error('Evidence database unavailable');
+      }
+      const [learnerId] = values;
+      const rows = [];
+      for (const enrolment of enrolments.filter((item) => item.learner_id === learnerId)) {
+        const programme = programmes.find((item) => item.id === enrolment.programme_id);
+        for (const requirement of evidenceRequirements.filter((item) => item.programme_id === programme.id
+          && item.archived_at === null)) {
+          const submissions = evidenceSubmissions.filter((item) => item.enrolment_id === enrolment.id
+            && item.requirement_id === requirement.id).sort((left, right) => right.version - left.version);
+          const versions = submissions.length ? submissions : [null];
+          for (const submission of versions) {
+            const review = submission && evidenceReviews.find((item) => item.evidence_submission_id === submission.id
+              && item.submission_version === submission.version);
+            rows.push({
+              enrolment_id: enrolment.id,
+              enrolment_status: enrolment.status,
+              programme_id: programme.id,
+              programme_name: programme.name,
+              requirement_id: requirement.id,
+              requirement_title: requirement.title,
+              guidance: requirement.guidance,
+              submission_id: submission?.id ?? null,
+              original_filename: submission?.original_filename ?? null,
+              submission_status: submission?.status ?? null,
+              version: submission?.version ?? null,
+              submitted_at: submission?.created_at ?? null,
+              review_id: review?.id ?? null,
+              assessor_name: users.find((item) => item.id === review?.assessor_user_id)?.full_name ?? null,
+              decision: review?.decision ?? null,
+              feedback: review?.feedback ?? null,
+              reviewed_at: review?.reviewed_at ?? null,
+            });
+          }
+        }
+      }
+      return { rows, rowCount: rows.length };
     }
 
     if (sql.includes('COUNT(DISTINCT e.id)') && sql.includes('programme_assessor_assignments')) {
@@ -1209,6 +1340,12 @@ async function requestSession(path, { method = 'GET', token = accessToken, body 
   });
 }
 
+async function requestLearnerPortal(path, { token = tokenFor(learnerId, 'learner') } = {}) {
+  return fetch(`${baseUrl}/api/learner${path}`, {
+    headers: token ? authHeaders(token) : {},
+  });
+}
+
 async function requestEvidenceRequirements(programmeId, path, {
   method = 'GET',
   token = accessToken,
@@ -1503,7 +1640,7 @@ test('login rejects invalid credentials without disclosing whether the email exi
 
   assert.equal(response.status, 401);
   assert.deepEqual(await response.json(), {
-    error: 'Email, password, or selected account type is incorrect.',
+    error: 'Email or password is incorrect.',
   });
 });
 
@@ -1566,7 +1703,7 @@ test('login rejects a valid account when it does not match the selected type', a
 
   assert.equal(response.status, 401);
   assert.deepEqual(await response.json(), {
-    error: 'Email, password, or selected account type is incorrect.',
+    error: 'Email or password is incorrect.',
   });
   assert.equal(response.headers.get('set-cookie'), null);
 });
@@ -2575,7 +2712,7 @@ test('assessor workflow migration preserves assignment and version-bound review 
     require.resolve('../migrations/202611020001_create_assessor_assignments_and_evidence_reviews.sql'),
     'utf8',
   );
-  assert.match(migration, /role IN \('provider', 'assessor', 'qa', 'admin'\)/);
+  assert.match(migration, /role IN \('provider', 'assessor', 'qa', 'admin', 'learner'\)/);
   assert.match(migration, /CREATE TABLE programme_assessor_assignments/);
   assert.match(migration, /programme_assessor_assignments_active_pair_unique/);
   assert.match(migration, /deactivated_at TIMESTAMPTZ/);
@@ -3028,6 +3165,100 @@ test('attendance migration defines provider-scoped foreign keys and unique sessi
   assert.match(migration, /CHECK \(status IN \('present', 'absent', 'excused'\)\)/);
   assert.match(migration, /UNIQUE \(session_id, enrolment_id\)/);
   assert.match(migration, /marked_by UUID NOT NULL REFERENCES users\(id\)/);
+});
+
+test('learner dashboard returns only linked programme, attendance, and evidence records', async () => {
+  const programmeResponse = await requestProgramme('/', {
+    method: 'POST',
+    body: { name: `Learner portal programme ${randomUUID()}`, description: 'Training programme details.' },
+  });
+  const { programme } = await programmeResponse.json();
+  const learnerResponse = await requestLearner('/', {
+    method: 'POST',
+    body: { fullName: `Learner portal profile ${randomUUID()}` },
+  });
+  const { learner } = await learnerResponse.json();
+  const linkedLearner = learners.find((item) => item.id === learner.id);
+  linkedLearner.learner_user_id = learnerId;
+  const enrolmentResponse = await requestEnrolment('/', {
+    method: 'POST',
+    body: { learnerId: learner.id, programmeId: programme.id },
+  });
+  const { enrolment } = await enrolmentResponse.json();
+  const startsAt = new Date().toISOString();
+  const sessionResponse = await requestSession('/', {
+    method: 'POST',
+    body: { programmeId: programme.id, title: 'Learner portal session', startsAt },
+  });
+  const { session } = await sessionResponse.json();
+  const attendanceResponse = await requestSession(`/${session.id}/attendance`, {
+    method: 'PUT',
+    body: { records: [{ enrolmentId: enrolment.id, status: 'present' }] },
+  });
+  assert.equal(attendanceResponse.status, 200);
+
+  const requirementResponse = await requestEvidenceRequirements(programme.id, '/', {
+    method: 'POST',
+    body: { title: 'Learner portal evidence', guidance: 'Submit the required document.' },
+  });
+  const { requirement } = await requirementResponse.json();
+  const uploadResponse = await requestEvidence(
+    enrolment.id,
+    `/api/enrolments/:enrolmentId/evidence-requirements/${requirement.id}/submissions`,
+    {
+      method: 'POST',
+      file: {
+        filename: 'learner-evidence.pdf',
+        mimeType: 'application/pdf',
+        buffer: Buffer.from(`%PDF-1.4\n${randomUUID()}`),
+      },
+    },
+  );
+  assert.equal(uploadResponse.status, 201);
+
+  const response = await requestLearnerPortal('/dashboard');
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.learner.id, learner.id);
+  assert.equal(body.programmes.length, 1);
+  assert.equal(body.programmes[0].name, programme.name);
+  assert.equal(body.programmes[0].providerName, registeredUser.fullName);
+  assert.equal(body.attendance.summary.recorded, 1);
+  assert.equal(body.attendance.summary.present, 1);
+  assert.equal(body.attendance.recent[0].title, session.title);
+  assert.equal(body.evidence.length, 1);
+  assert.equal(body.evidence[0].status, 'SUBMITTED');
+  assert.equal(body.evidence[0].submissions[0].filename, 'learner-evidence.pdf');
+  assert.equal(body.evidenceSummary.awaitingAssessment, 1);
+  assert.ok(body.recentActivity.some((item) => item.description === 'Evidence submitted'));
+
+  const unrelatedProgramme = await requestLearnerPortal(`/programmes/${randomUUID()}`);
+  assert.equal(unrelatedProgramme.status, 404);
+  const assessorAccess = await requestLearnerPortal('/dashboard', {
+    token: tokenFor(assessorId, 'assessor'),
+  });
+  assert.equal(assessorAccess.status, 403);
+  const learnerToken = tokenFor(learnerId, 'learner');
+  const attendanceWrite = await requestSession(`/${session.id}/attendance`, {
+    method: 'PUT',
+    token: learnerToken,
+    body: { records: [{ enrolmentId: enrolment.id, status: 'absent' }] },
+  });
+  assert.equal(attendanceWrite.status, 403);
+  const learnerUpload = await requestEvidence(
+    enrolment.id,
+    `/api/enrolments/:enrolmentId/evidence-requirements/${requirement.id}/submissions`,
+    {
+      method: 'POST',
+      token: learnerToken,
+      file: {
+        filename: 'learner-replacement.pdf',
+        mimeType: 'application/pdf',
+        buffer: Buffer.from(`%PDF-1.4\n${randomUUID()}`),
+      },
+    },
+  );
+  assert.equal(learnerUpload.status, 403);
 });
 
 test('archiving a learner withdraws active enrolments and preserves their history', async () => {

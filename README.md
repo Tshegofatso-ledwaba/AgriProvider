@@ -7,6 +7,7 @@ AgriProvider is a mobile-first training-provider workspace built with Expo, Reac
 - Provider registration, sign-in, secure token restoration, and sign-out.
 - Provider-scoped programme create, list, detail, update, and archive.
 - Provider-scoped learner registration, search, detail, update, duplicate warning, and archive. Learner profiles store a generated internal reference, full name, optional phone/email, and system-managed timestamps; no government ID is collected.
+- Provisioned learner accounts can view their linked programmes, recorded attendance, evidence requirements, submission history, assessor feedback, and next-step actions in a mobile-first learner workspace. QA completion, notifications, and learner evidence uploads are not currently available.
 - Provider-scoped enrolment create/list/detail and active/withdrawn status, with one active learner-programme link enforced by PostgreSQL.
 - Provider-scoped training sessions and attendance registers for `present`, `absent`, and `excused`.
 - Provider-configured evidence checklist items per programme and provider-scoped learner evidence submissions, version history, controlled downloads, restricted deletion of the latest unreviewed version, and completion counts. No official checklist items are pre-filled; local file storage is development-only and no cloud storage is configured.

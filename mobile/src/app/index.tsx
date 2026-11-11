@@ -40,6 +40,9 @@ export default function HomeScreen() {
   if (user.role === 'qa') {
     return <Redirect href={routeHref('/qa')} />;
   }
+  if (user.role === 'learner') {
+    return <Redirect href={routeHref('/learner')} />;
+  }
   return <ProviderDashboard name={user.fullName} />;
 }
 

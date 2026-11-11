@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 const { isDatabaseConnectionError } = require('./database');
 const { authenticate } = require('./middleware/authenticate');
 
-const roles = new Set(['provider', 'assessor', 'qa', 'admin']);
+const roles = new Set(['provider', 'assessor', 'qa', 'admin', 'learner']);
 const passwordRounds = 12;
 const sessionCookieName = 'agriprovider_session';
 const sessionMaxAge = 60 * 60 * 1000;
@@ -147,7 +147,7 @@ function createAuthRouter({ database, jwtSecret, secureCookies }) {
       if (!row || !passwordMatches || !roles.has(row.role)
         || (accountType !== undefined && row.role !== accountType)) {
         return response.status(401).json({
-          error: 'Email, password, or selected account type is incorrect.',
+          error: 'Email or password is incorrect.',
         });
       }
 

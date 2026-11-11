@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AgriProvider API Documentation</title>
+  <style>
+    @page { size: A4; margin: 16mm 15mm 18mm; @bottom-left { content: "AgriProvider API Reference · 10 November 2026"; color: #64736a; font: 8pt Arial, sans-serif; } @bottom-right { content: counter(page); color: #64736a; font: 8pt Arial, sans-serif; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #24352e; font: 9.5pt/1.48 Arial, Helvetica, sans-serif; }
+    h1, h2, h3 { color: #173f35; line-height: 1.2; }
+    h1 { margin: 0 0 8mm; font: 30pt/1.08 Georgia, serif; }
+    h2 { margin: 0 0 4mm; padding-bottom: 2mm; border-bottom: 1px solid #d5e0d9; font-size: 19pt; }
+    h3 { margin: 6mm 0 2mm; font-size: 12pt; }
+    p { margin: 2mm 0 3mm; }
+    a { color: #176f4c; }
+    code, pre { font-family: Consolas, "Courier New", monospace; }
+    code { color: #174e3c; font-size: 8.5pt; overflow-wrap: anywhere; }
+    pre { margin: 2mm 0 4mm; padding: 3mm; border: 1px solid #d5e0d9; border-radius: 2mm; background: #f4f8f5; color: #23352d; font-size: 8pt; line-height: 1.42; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .cover { min-height: 235mm; display: flex; flex-direction: column; justify-content: space-between; page-break-after: always; }
+    .brand { display: flex; align-items: center; gap: 3mm; color: #176f4c; font-weight: 700; }
+    .brand-mark { width: 11mm; height: 11mm; display: grid; place-items: center; border-radius: 3mm; background: #176f4c; color: white; font-weight: 700; }
+    .cover-title { margin-top: 40mm; }
+    .eyebrow { color: #176f4c; font-size: 9pt; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
+    .subtitle { max-width: 135mm; color: #52635a; font-size: 13pt; }
+    .cover-band { padding: 8mm; border-left: 3mm solid #176f4c; background: #f0f6f1; }
+    .muted { color: #63736a; }
+    .note { margin: 3mm 0; padding: 3mm 4mm; border-left: 1.2mm solid #d59435; background: #fff7e9; }
+    .success { border-left-color: #258354; background: #f0f7f2; }
+    .danger { border-left-color: #b94a48; background: #fff2f0; }
+    .section { margin-bottom: 8mm; }
+    .page { page-break-before: always; }
+    .keep { break-inside: avoid; page-break-inside: avoid; }
+    table { width: 100%; margin: 3mm 0 5mm; border-collapse: collapse; font-size: 8.3pt; }
+    thead { display: table-header-group; }
+    tr { break-inside: avoid; page-break-inside: avoid; }
+    th { padding: 2.2mm; background: #e9f1eb; color: #173f35; text-align: left; vertical-align: top; }
+    td { padding: 2.1mm; border-bottom: 1px solid #dfe7e1; vertical-align: top; }
+    .method { width: 17mm; font-weight: 700; color: #176f4c; white-space: nowrap; }
+    .path { width: 58mm; }
+    .role { width: 28mm; }
+    .small { font-size: 8pt; }
+    .toc { columns: 2; column-gap: 12mm; margin: 4mm 0; padding-left: 6mm; }
+    .toc li { margin: 1.4mm 0; break-inside: avoid; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; }
+    .pill { display: inline-block; margin: 1mm 1mm 1mm 0; padding: 1mm 2mm; border-radius: 99px; background: #e9f1eb; color: #176f4c; font-size: 8pt; font-weight: 700; }
+    .endpoint-group { margin: 5mm 0; }
+    .footnote { margin-top: 5mm; color: #64736a; font-size: 8pt; }
+    @media screen { body { max-width: 210mm; margin: 0 auto; padding: 18mm 15mm; } .cover { min-height: 260mm; } }
+    @media print { .section { break-inside: auto; } }
+  </style>
+</head>
+<body>
+  <section class="cover">
+    <div class="brand"><span class="brand-mark">A</span><span>AgriProvider</span></div>
+    <div class="cover-title">
+      <div class="eyebrow">Developer reference</div>
+      <h1>API<br>Documentation</h1>
+      <p class="subtitle">Endpoint reference for authentication, provider operations, attendance, evidence review, assessor assignments, and the learner portal.</p>
+      <p class="muted">Version 1 · 10 November 2026</p>
+    </div>
+    <div class="cover-band">
+      <strong>Scope</strong>
+      <p>This document describes the Express API implemented in this repository. It does not describe planned integrations or imply official accreditation, certification, QA, funding, or payment behavior.</p>
+      <p class="small muted">Base URL for local development: <code>http://localhost:5000</code></p>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Contents</h2>
+    <ol class="toc">
+      <li>Overview and conventions</li>
+      <li>Authentication and authorization</li>
+      <li>Errors and status codes</li>
+      <li>Health</li>
+      <li>Accounts and profile</li>
+      <li>Programmes and learners</li>
+      <li>Enrolments, sessions, attendance</li>
+      <li>Evidence requirements and submissions</li>
+      <li>Assessor review</li>
+      <li>Administrator assignments</li>
+      <li>Learner portal</li>
+      <li>Configuration and limits</li>
+      <li>Out-of-scope capabilities</li>
+    </ol>
+    <h3>Overview</h3>
+    <p>The API is a JSON REST service backed by PostgreSQL. All routes except <code>GET /health</code> and public authentication routes require authentication. Resource ownership and role access are enforced on the server; clients must not treat hidden UI controls as authorization.</p>
+    <p>Unless a route says otherwise, JSON requests use <code>Content-Type: application/json</code> and successful responses use JSON. IDs are UUIDs. Timestamps are ISO 8601 values. JSON request bodies are limited to 16 KB; evidence uploads use multipart form data and are limited to 5 MB.</p>
+    <h3>Local quick start</h3>
+    <pre>cd server
+npm install
+# Configure server/.env using server/.env.example
+npm run migrate
+npm start
+# Check: http://localhost:5000/health</pre>
+    <div class="note danger"><strong>Database caution:</strong> confirm the target database privately before applying migrations. Do not run development migrations against production without explicit approval.</div>
+  </section>
+
+  <section class="page section">
+    <h2>Authentication</h2>
+    <p>Supported roles are <span class="pill">provider</span><span class="pill">learner</span><span class="pill">assessor</span><span class="pill">qa</span><span class="pill">admin</span>. The API reads the user's role and active status from the database for each authenticated request.</p>
+    <h3>Native clients: bearer token</h3>
+    <p>Successful native login returns a one-hour JWT. Send it on protected requests:</p>
+    <pre>Authorization: Bearer &lt;accessToken&gt;</pre>
+    <h3>Web clients: HTTP-only cookie</h3>
+    <p>Send <code>X-Auth-Mode: cookie</code> and the exact configured <code>Origin</code> to login. Include credentials in fetch. The API sets an HTTP-only, SameSite=Strict cookie scoped to <code>/api</code>; the token is not returned in JSON.</p>
+    <pre>POST /api/auth/login
+Origin: http://localhost:8081
+X-Auth-Mode: cookie
+Content-Type: application/json
+
+{"email":"person@example.com","password":"&lt;password&gt;"}</pre>
+    <p>Browser clients must use <code>credentials: "include"</code>. Production cookies are Secure and production <code>WEB_ORIGIN</code> must use HTTPS.</p>
+    <table>
+      <thead><tr><th>Method and path</th><th>Access</th><th>Request / response</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method">POST</span><code>/api/auth/register</code></td><td>Public; rate limited</td><td>Body: <code>{fullName, email, password}</code>. Creates a provider account only; any client-supplied role is ignored. Returns <code>201 {user, accessToken}</code> for native clients or sets the web cookie and returns <code>201 {user}</code>. Duplicate email: <code>409</code>.</td></tr>
+        <tr><td><span class="method">POST</span><code>/api/auth/login</code></td><td>Public; rate limited</td><td>Body: <code>{email, password, accountType?}</code>. Optional accountType must match the existing role; it never changes the role. Returns the same native/web auth result as registration. Invalid credentials: <code>401</code>.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/auth/me</code></td><td>Authenticated</td><td>Returns <code>{user: {id, fullName, email, role}}</code>.</td></tr>
+        <tr><td><span class="method">POST</span><code>/api/auth/logout</code></td><td>Web cookie session</td><td>Clears the session cookie and returns <code>204</code>.</td></tr>
+      </tbody>
+    </table>
+    <div class="note"><strong>Privileged provisioning:</strong> public registration cannot create learner, assessor, QA, or admin accounts. Admin, assessor, and QA users are provisioned from a trusted server terminal. Learner access requires a learner-role user linked to a learner profile.</div>
+    <h3>Example protected request</h3>
+    <pre>curl http://localhost:5000/api/programmes \
+  -H "Authorization: Bearer &lt;accessToken&gt;" \
+  -H "Accept: application/json"</pre>
+  </section>
+
+  <section class="page section">
+    <h2>Errors and status codes</h2>
+    <p>Errors use a JSON object with an <code>error</code> string. Some conflict responses also include a machine-readable <code>code</code>.</p>
+    <table>
+      <thead><tr><th>Status</th><th>Meaning</th><th>Typical cases</th></tr></thead>
+      <tbody>
+        <tr><td><code>400</code></td><td>Invalid request</td><td>Malformed JSON, unsupported fields, invalid UUID/query/body, or invalid upload.</td></tr>
+        <tr><td><code>401</code></td><td>Authentication required / rejected</td><td>Missing, invalid, expired token; inactive account; incorrect login credentials.</td></tr>
+        <tr><td><code>403</code></td><td>Access denied</td><td>Wrong role or disallowed web-session origin.</td></tr>
+        <tr><td><code>404</code></td><td>Resource unavailable</td><td>Missing resource or resource outside the caller's permitted scope.</td></tr>
+        <tr><td><code>409</code></td><td>Conflict</td><td>Duplicate learner warning, duplicate enrolment, duplicate upload, stale review, or invalid workflow state.</td></tr>
+        <tr><td><code>413</code></td><td>Request too large</td><td>JSON body or evidence file exceeds its limit.</td></tr>
+        <tr><td><code>429</code></td><td>Too many requests</td><td>Authentication rate limit exceeded (10 attempts per 15 minutes).</td></tr>
+        <tr><td><code>500</code></td><td>Internal server error</td><td>Unexpected server failure; details are not returned.</td></tr>
+        <tr><td><code>503</code></td><td>Service unavailable</td><td>Database connection unavailable or configured file storage unavailable.</td></tr>
+      </tbody>
+    </table>
+    <pre>{"error":"Email or password is incorrect."}</pre>
+    <p>Authentication failures intentionally do not disclose whether an email address exists. Database diagnostics belong in protected server logs, not API responses.</p>
+    <h3>Health</h3>
+    <table>
+      <thead><tr><th>Method and path</th><th>Access</th><th>Response</th></tr></thead>
+      <tbody><tr><td><span class="method">GET</span><code>/health</code></td><td>Public</td><td><code>200 {status:"ok", database:"connected"}</code>; returns <code>503 {status:"unavailable", database:"disconnected"}</code> if the database check fails.</td></tr></tbody>
+    </table>
+  </section>
+
+  <section class="page section">
+    <h2>Provider resources</h2>
+    <p>Provider routes derive provider ownership from the authenticated user. Request bodies do not accept a provider ID.</p>
+    <h3>Programmes · provider role</h3>
+    <table>
+      <thead><tr><th>Method and path</th><th>Request / result</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method">GET</span><code>/api/programmes</code></td><td>List active programmes owned by the provider: <code>{programmes:[...]}</code>.</td></tr>
+        <tr><td><span class="method">POST</span><code>/api/programmes</code></td><td>Body: <code>{name, description?}</code>. Name 1–160 chars; description string/null up to 2,000 chars. Returns <code>201 {programme}</code>.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/programmes/:id</code></td><td>Get an owned active programme: <code>{programme}</code>.</td></tr>
+        <tr><td><span class="method">PATCH</span><code>/api/programmes/:id</code></td><td>Body contains at least one of <code>name</code>, <code>description</code>. Returns <code>{programme}</code>.</td></tr>
+        <tr><td><span class="method">DELETE</span><code>/api/programmes/:id</code></td><td>Archives the programme; returns <code>{message}</code>. Related history is preserved.</td></tr>
+      </tbody>
+    </table>
+    <h3>Learners · provider role</h3>
+    <table>
+      <thead><tr><th>Method and path</th><th>Request / result</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method">GET</span><code>/api/learners</code></td><td>Query: <code>q</code> (prefix search, max 100 chars), <code>status</code> active|archived|all (default active), <code>limit</code> 1–100 (default 50), <code>offset</code> ≥0 (default 0). Returns <code>{learners,total,limit,offset}</code>.</td></tr>
+        <tr><td><span class="method">POST</span><code>/api/learners</code></td><td>Body: <code>{fullName, phone?, email?, confirmPossibleDuplicate?}</code>. Full name 1–120 chars; optional phone ≤32 chars and email ≤254 chars. Returns <code>201 {learner}</code>.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/learners/:id</code></td><td>Get one owned learner profile: <code>{learner}</code>.</td></tr>
+        <tr><td><span class="method">PATCH</span><code>/api/learners/:id</code></td><td>Partial update using <code>fullName</code>, <code>phone</code>, <code>email</code>; duplicate warning may require <code>confirmPossibleDuplicate:true</code>. Returns <code>{learner}</code>.</td></tr>
+        <tr><td><span class="method">DELETE</span><code>/api/learners/:id</code></td><td>Archives the learner and withdraws active enrolments; returns <code>{message}</code>.</td></tr>
+      </tbody>
+    </table>
+    <p>Potential duplicate matches return <code>409</code> with code <code>POSSIBLE_DUPLICATE</code>. The provider must review and explicitly confirm if continuing.</p>
+  </section>
+
+  <section class="page section">
+    <h2>Enrolments and attendance</h2>
+    <h3>Enrolments · provider role</h3>
+    <table>
+      <thead><tr><th>Method and path</th><th>Request / result</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method">GET</span><code>/api/enrolments</code></td><td>Query: <code>learnerId?</code>, <code>programmeId?</code>, <code>status</code> active|withdrawn|all (default active), <code>limit</code> 1–100 (default 50), <code>offset</code> ≥0. Returns <code>{enrolments,total,limit,offset}</code>.</td></tr>
+        <tr><td><span class="method">POST</span><code>/api/enrolments</code></td><td>Body: <code>{learnerId, programmeId}</code> (UUIDs). Creates same-provider active enrolment. Returns <code>201 {enrolment}</code>; duplicate active pair returns <code>409</code>.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/enrolments/:id</code></td><td>Retrieve an owned enrolment: <code>{enrolment}</code>.</td></tr>
+        <tr><td><span class="method">PATCH</span><code>/api/enrolments/:id</code></td><td>Body: <code>{status:"active"}</code> or <code>{status:"withdrawn"}</code>. Returns <code>{enrolment}</code>.</td></tr>
+      </tbody>
+    </table>
+    <h3>Training sessions and attendance · provider role</h3>
+    <table>
+      <thead><tr><th>Method and path</th><th>Request / result</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method">GET</span><code>/api/sessions</code></td><td>Optional query <code>programmeId</code>. Lists active sessions and counts.</td></tr>
+        <tr><td><span class="method">POST</span><code>/api/sessions</code></td><td>Body: <code>{programmeId,title,startsAt}</code>. Start time must be timezone-bearing ISO 8601. Returns <code>201 {session}</code>.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/sessions/:id</code></td><td>Retrieve an owned session: <code>{session}</code>.</td></tr>
+        <tr><td><span class="method">PATCH</span><code>/api/sessions/:id</code></td><td>Partial body: <code>{title?, startsAt?}</code>. Returns <code>{session}</code>.</td></tr>
+        <tr><td><span class="method">DELETE</span><code>/api/sessions/:id</code></td><td>Archives the session; returns <code>{message}</code>.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/sessions/:id/attendance</code></td><td>Returns <code>{session, records, summary}</code>. Summary counts present, absent, excused, and unrecorded active enrolments.</td></tr>
+        <tr><td><span class="method">PUT</span><code>/api/sessions/:id/attendance</code></td><td>Body: <code>{records:[{enrolmentId,status}]}</code>, 1–100 records. Status: present|absent|excused. Each enrolment may appear once. Atomic upsert; returns <code>{records}</code>.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="page section">
+    <h2>Evidence</h2>
+    <h3>Evidence requirements · provider role</h3>
+    <table>
+      <thead><tr><th>Method and path</th><th>Request / result</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method">GET</span><code>/api/programmes/:programmeId/evidence-requirements</code></td><td>Lists active checklist requirements: <code>{requirements}</code>.</td></tr>
+        <tr><td><span class="method">POST</span><code>/api/programmes/:programmeId/evidence-requirements</code></td><td>Body: <code>{title, guidance?}</code>. Title 1–160 chars; guidance ≤2,000 chars. Returns <code>201 {requirement}</code>.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/programmes/:programmeId/evidence-requirements/:id</code></td><td>Retrieve a requirement for an owned programme: <code>{requirement}</code>.</td></tr>
+        <tr><td><span class="method">PATCH</span><code>/api/programmes/:programmeId/evidence-requirements/:id</code></td><td>Partial body: <code>{title?, guidance?}</code>. Returns <code>{requirement}</code>.</td></tr>
+        <tr><td><span class="method">DELETE</span><code>/api/programmes/:programmeId/evidence-requirements/:id</code></td><td>Archives the requirement; returns <code>{message}</code>.</td></tr>
+      </tbody>
+    </table>
+    <h3>Evidence submissions · provider role</h3>
+    <table>
+      <thead><tr><th>Method and path</th><th>Request / result</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method">POST</span><code>/api/enrolments/:enrolmentId/evidence-requirements/:requirementId/submissions</code></td><td>Multipart form with one field named <code>file</code>. Accepts PDF/JPEG/PNG up to 5 MB. Returns <code>201 {submission}</code>; upload starts as SUBMITTED.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/enrolments/:enrolmentId/evidence-submissions</code></td><td>Lists configured requirements with latest submission/review and completion counts: <code>{requirements,completion}</code>.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/evidence-submissions/:submissionId</code></td><td>Retrieve owned submission metadata: <code>{submission}</code>.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/evidence-submissions/:submissionId/history</code></td><td>Returns all versions and associated reviews: <code>{submissions,reviews}</code>.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/evidence-submissions/:submissionId/file</code></td><td>Downloads the private authorized file as an attachment; response is not JSON.</td></tr>
+        <tr><td><span class="method">DELETE</span><code>/api/evidence-submissions/:submissionId</code></td><td>Deletes only the latest unreviewed SUBMITTED version. Reviewed/approved and prior versions cannot be deleted.</td></tr>
+      </tbody>
+    </table>
+    <p>File type is verified from content bytes, MIME type, and extension. The server stores private metadata and uses its configured storage adapter for file bytes. A revised version is allowed only after corrections are requested. Duplicate latest file returns <code>409 DUPLICATE_SUBMISSION</code>.</p>
+    <p>Evidence states: <span class="pill">NOT_SUBMITTED</span><span class="pill">SUBMITTED</span><span class="pill">UNDER_REVIEW</span><span class="pill">APPROVED</span><span class="pill">CORRECTION_REQUIRED</span>.</p>
+  </section>
+
+  <section class="page section">
+    <h2>Assessor review</h2>
+    <p>All routes require an assessor account and active assignment to the relevant programme. File access is authorized and private.</p>
+    <table>
+      <thead><tr><th>Method and path</th><th>Request / result</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method">GET</span><code>/api/assessor/programmes</code></td><td>Assigned programmes with learner and latest-evidence counts: <code>{programmes}</code>.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/assessor/programmes/:programmeId/learners</code></td><td>Active enrolled learners in an assigned programme: <code>{learners}</code>.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/assessor/programmes/:programmeId/submissions</code></td><td>Optional <code>status</code> query: all|SUBMITTED|APPROVED|CORRECTION_REQUIRED|UNDER_REVIEW. Returns latest submission per requirement.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/assessor/submissions/:submissionId</code></td><td>Retrieve assigned submission metadata and learner/programme/requirement details: <code>{submission}</code>.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/assessor/submissions/:submissionId/file</code></td><td>Download the authorized private evidence file.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/assessor/submissions/:submissionId/history</code></td><td>Returns all versions for the assigned evidence requirement: <code>{submissions}</code>.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/assessor/submissions/:submissionId/reviews</code></td><td>Returns version-bound review history: <code>{reviews}</code>.</td></tr>
+        <tr><td><span class="method">POST</span><code>/api/assessor/submissions/:submissionId/reviews</code></td><td>Body: <code>{decision, feedback?}</code>; decision APPROVED or CORRECTION_REQUESTED. Correction feedback is required, max 2,000 chars. Only the latest SUBMITTED version can be reviewed. Returns <code>201 {review}</code>.</td></tr>
+      </tbody>
+    </table>
+    <div class="note"><strong>Review behavior:</strong> decisions are immutable and tied to the exact submission version and assignment. Approval sets status APPROVED; a correction request sets CORRECTION_REQUIRED.</div>
+  </section>
+
+  <section class="page section">
+    <h2>Administrator assignments</h2>
+    <p>These routes require an active administrator account. Administrator accounts are created through the trusted server CLI, never public registration.</p>
+    <table>
+      <thead><tr><th>Method and path</th><th>Request / result</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method">GET</span><code>/api/admin/assessors</code></td><td>List active assessor accounts: <code>{assessors}</code>.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/admin/programmes</code></td><td>List active programmes and provider names: <code>{programmes}</code>.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/admin/assessor-assignments</code></td><td>List active and historical assignments: <code>{assignments}</code>.</td></tr>
+        <tr><td><span class="method">POST</span><code>/api/admin/assessor-assignments</code></td><td>Body: <code>{programmeId, assessorUserId}</code> (UUIDs). Returns <code>201 {assignment}</code>. Existing active pair: <code>409 ACTIVE_ASSIGNMENT_EXISTS</code>.</td></tr>
+        <tr><td><span class="method">PATCH</span><code>/api/admin/assessor-assignments/:assignmentId</code></td><td>Body is one of <code>{status:"ACTIVE"}</code>, <code>{status:"INACTIVE"}</code>, or <code>{assessorUserId}</code> to reassign while preserving history. Returns <code>{assignment}</code>.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="page section">
+    <h2>Learner portal</h2>
+    <p>All routes require an authenticated learner role. The API finds the caller's linked learner profile; clients cannot choose an arbitrary learner ID.</p>
+    <table>
+      <thead><tr><th>Method and path</th><th>Request / result</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method">GET</span><code>/api/learner/dashboard</code></td><td>Returns the learner profile, programme enrolments, attendance summary and recent records, evidence requirements and all submission versions, current-version assessor feedback, evidence summary, and recent activity.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/learner/programmes</code></td><td>Returns the caller's linked programme enrolments: <code>{programmes}</code>.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/learner/programmes/:id</code></td><td>Returns one programme linked to the caller: <code>{programme}</code>. Unlinked programme returns 404.</td></tr>
+      </tbody>
+    </table>
+    <h3>Dashboard response shape</h3>
+    <pre>{
+  "learner": { "id": "&lt;uuid&gt;", "learnerReference": "&lt;reference&gt;", "fullName": "&lt;name&gt;", "email": null, "phone": null },
+  "programmes": [],
+  "attendance": { "summary": { "recorded": 0, "present": 0, "absent": 0, "excused": 0 }, "recent": [] },
+  "evidence": [],
+  "evidenceSummary": { "total": 0, "notSubmitted": 0, "awaitingAssessment": 0, "approved": 0, "correctionsRequired": 0 },
+  "recentActivity": []
+}</pre>
+    <p>Attendance is read-only for learners. No learner upload, notification, announcement, QA verification, or official completion endpoint is implemented.</p>
+  </section>
+
+  <section class="page section">
+    <h2>Configuration and limits</h2>
+    <table>
+      <thead><tr><th>Setting</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>DATABASE_URL</code></td><td>PostgreSQL connection string; server-only secret.</td></tr>
+        <tr><td><code>JWT_SECRET</code></td><td>Signing secret, minimum 32 characters; server-only secret.</td></tr>
+        <tr><td><code>WEB_ORIGIN</code></td><td>Exact allowed web origin, e.g. <code>http://localhost:8081</code> locally; HTTPS required in production.</td></tr>
+        <tr><td><code>EVIDENCE_STORAGE_DIR</code></td><td>Optional local development evidence directory. Relative paths resolve from <code>server/</code>.</td></tr>
+      </tbody>
+    </table>
+    <ul>
+      <li>Keep all secrets in <code>server/.env</code>; never place them in mobile config, source control, or this document.</li>
+      <li>Authentication endpoints are limited to 10 attempts per 15-minute window.</li>
+      <li>Passwords are 12–72 UTF-8 bytes and stored as bcrypt hashes.</li>
+      <li>Evidence accepts PDF, JPEG, and PNG, up to 5 MB per file.</li>
+      <li>Local filesystem evidence storage is for development only; production requires a configured private storage adapter.</li>
+      <li>Most JSON request bodies are limited to 16 KB.</li>
+    </ul>
+    <h2>Not implemented</h2>
+    <p>The API does not provide external AgriSETA/government integrations, payment execution, official accreditation or certification issuance, milestone eligibility, QA verification, learner evidence uploads, learner notifications or announcements, or a full audit system. Do not treat dashboard summaries as official completion or payment decisions.</p>
+    <div class="cover-band">
+      <strong>Source of truth</strong>
+      <p>This reference was compiled from the API routes, validation logic, and server documentation in the AgriProvider repository. The automated API suite uses an in-memory database stub; it is not proof of connectivity to a production database.</p>
+    </div>
+    <p class="footnote">AgriProvider API Documentation · Version 1 · 10 November 2026</p>
+  </section>
+</body>
+</html>

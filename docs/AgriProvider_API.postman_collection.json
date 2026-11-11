@@ -1,0 +1,182 @@
+{
+  "info": {
+    "_postman_id": "6bcebb8a-9c16-4e16-a74b-92c2940c8087",
+    "name": "AgriProvider API",
+    "description": "Import this collection and AgriProvider_Local.postman_environment.json into Postman. Select the local environment, set email/password/fullName, then send Health, Auth > Login, and the requests for the role assigned to that account. Login saves accessToken automatically. Public signup creates provider accounts only; learner, assessor, QA, and admin accounts must be provisioned. The collection uses bearer-token auth; web cookie auth is documented in the API PDF. All IDs and credentials are variables; this file contains no secrets. Requests use the implemented API only. Local base URL defaults to http://localhost:5000.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{accessToken}}", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000", "type": "string" },
+    { "key": "accessToken", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Health and Authentication",
+      "item": [
+        {
+          "name": "Health check",
+          "request": { "method": "GET", "url": "{{baseUrl}}/health", "description": "Public. Checks API and database connectivity. Expected: 200 {status: ok, database: connected}; database outage returns 503." },
+          "auth": { "type": "noauth" }
+        },
+        {
+          "name": "Register provider",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"{{fullName}}\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/auth/register",
+            "description": "Public and rate limited. Creates a provider account only; any role sent by a client is ignored. Password must be 12–72 UTF-8 bytes. Duplicate email returns 409. A successful native-style response includes user and accessToken."
+          },
+          "auth": { "type": "noauth" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if (pm.response.code === 201) {", "  const body = pm.response.json();", "  if (body.accessToken) pm.environment.set('accessToken', body.accessToken);", "  if (body.user && body.user.id) pm.environment.set('userId', body.user.id);", "}"] } }]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/auth/login",
+            "description": "Public and rate limited. Native-style response returns a one-hour JWT. Optional accountType must exactly match the existing server-side role; it never changes the role. Do not send accountType unless you need this check."
+          },
+          "auth": { "type": "noauth" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if (pm.response.code === 200) {", "  const body = pm.response.json();", "  if (body.accessToken) pm.environment.set('accessToken', body.accessToken);", "  if (body.user && body.user.id) pm.environment.set('userId', body.user.id);", "  if (body.user && body.user.role) pm.environment.set('userRole', body.user.role);", "}"] } }]
+        },
+        {
+          "name": "Current user",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/auth/me", "description": "Authenticated. Returns {user: {id, fullName, email, role}}." }
+        },
+        {
+          "name": "Logout web cookie",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/auth/logout", "description": "Web cookie flow only. Clears the HttpOnly session cookie and returns 204. Bearer-token clients should discard accessToken locally. Postman bearer auth does not create a browser cookie." },
+          "auth": { "type": "noauth" }
+        }
+      ]
+    },
+    {
+      "name": "Provider - Programmes",
+      "item": [
+        { "name": "List programmes", "request": { "method": "GET", "url": "{{baseUrl}}/api/programmes", "description": "Provider only. Returns active programmes owned by the authenticated provider." } },
+        {
+          "name": "Create programme",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"{{programmeName}}\",\n  \"description\": \"{{programmeDescription}}\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{baseUrl}}/api/programmes", "description": "Provider only. Name required, 1–160 characters. Description is optional/null and limited to 2,000 characters. Successful response: 201 {programme}." },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if (pm.response.code === 201) {", "  const body = pm.response.json();", "  if (body.programme && body.programme.id) pm.environment.set('programmeId', body.programme.id);", "}"] } }]
+        },
+        { "name": "Get programme", "request": { "method": "GET", "url": "{{baseUrl}}/api/programmes/{{programmeId}}", "description": "Provider only; returns a programme owned by the caller." } },
+        { "name": "Update programme", "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"{{programmeName}}\",\n  \"description\": \"{{programmeDescription}}\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{baseUrl}}/api/programmes/{{programmeId}}", "description": "Provider only. Supply at least one of name or description." } },
+        { "name": "Archive programme", "request": { "method": "DELETE", "url": "{{baseUrl}}/api/programmes/{{programmeId}}", "description": "Provider only. Archives the programme; it does not delete related history." } }
+      ]
+    },
+    {
+      "name": "Provider - Learners",
+      "item": [
+        { "name": "List and search learners", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/learners?q={{searchPrefix}}&status={{learnerStatus}}&limit=50&offset=0", "query": [{ "key": "q", "value": "{{searchPrefix}}", "description": "Optional name/reference prefix, up to 100 characters." }, { "key": "status", "value": "{{learnerStatus}}", "description": "active, archived, or all." }, { "key": "limit", "value": "50" }, { "key": "offset", "value": "0" }] }, "description": "Provider only. Returns {learners,total,limit,offset}. Default status is active, limit 50; limit range 1–100." } },
+        {
+          "name": "Create learner profile",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"{{learnerFullName}}\",\n  \"email\": \"{{learnerEmail}}\",\n  \"phone\": \"{{learnerPhone}}\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{baseUrl}}/api/learners", "description": "Provider only. Creates a profile, not a login account. Full name required (1–120 chars); email and phone optional. Possible duplicate returns 409 POSSIBLE_DUPLICATE; review and retry with confirmPossibleDuplicate:true only when appropriate." },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if (pm.response.code === 201) {", "  const body = pm.response.json();", "  if (body.learner && body.learner.id) pm.environment.set('learnerId', body.learner.id);", "}"] } }]
+        },
+        { "name": "Get learner profile", "request": { "method": "GET", "url": "{{baseUrl}}/api/learners/{{learnerId}}", "description": "Provider only; profile must belong to the authenticated provider." } },
+        { "name": "Update learner profile", "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"{{learnerFullName}}\",\n  \"email\": \"{{learnerEmail}}\",\n  \"phone\": \"{{learnerPhone}}\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{baseUrl}}/api/learners/{{learnerId}}", "description": "Provider only. Partial update; fields are fullName, email, phone. Duplicate warning may require confirmPossibleDuplicate:true." } },
+        { "name": "Archive learner", "request": { "method": "DELETE", "url": "{{baseUrl}}/api/learners/{{learnerId}}", "description": "Provider only. Archives the learner and withdraws active enrolments while preserving history." } }
+      ]
+    },
+    {
+      "name": "Provider - Enrolments",
+      "item": [
+        { "name": "List enrolments", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/enrolments?status={{enrolmentStatus}}&limit=50&offset=0", "query": [{ "key": "status", "value": "{{enrolmentStatus}}", "description": "active, withdrawn, all" }, { "key": "limit", "value": "50" }, { "key": "offset", "value": "0" }] }, "description": "Provider only. Returns {enrolments,total,limit,offset}. Add learnerId and/or programmeId query filters when needed." } },
+        {
+          "name": "Create enrolment",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"learnerId\": \"{{learnerId}}\",\n  \"programmeId\": \"{{programmeId}}\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{baseUrl}}/api/enrolments", "description": "Provider only. Both UUIDs must belong to the same provider. Creates active enrolment; duplicate active learner/programme pair returns 409." },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if (pm.response.code === 201) {", "  const body = pm.response.json();", "  if (body.enrolment && body.enrolment.id) pm.environment.set('enrolmentId', body.enrolment.id);", "}"] } }]
+        },
+        { "name": "Get enrolment", "request": { "method": "GET", "url": "{{baseUrl}}/api/enrolments/{{enrolmentId}}", "description": "Provider only; returns an owned enrolment." } },
+        { "name": "Change enrolment status", "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"status\": \"withdrawn\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{baseUrl}}/api/enrolments/{{enrolmentId}}", "description": "Provider only. Set status to active or withdrawn. Reactivation may conflict if another active pair exists." } }
+      ]
+    },
+    {
+      "name": "Provider - Sessions and Attendance",
+      "item": [
+        { "name": "List sessions", "request": { "method": "GET", "url": "{{baseUrl}}/api/sessions", "description": "Provider only. Lists active sessions and actual enrolment/attendance counts. Add a programmeId query filter when needed." } },
+        {
+          "name": "Create session",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"programmeId\": \"{{programmeId}}\",\n  \"title\": \"{{sessionTitle}}\",\n  \"startsAt\": \"{{startsAt}}\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{baseUrl}}/api/sessions", "description": "Provider only. startsAt must be timezone-bearing ISO 8601, e.g. 2026-11-10T09:00:00+02:00." },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if (pm.response.code === 201) {", "  const body = pm.response.json();", "  if (body.session && body.session.id) pm.environment.set('sessionId', body.session.id);", "}"] } }]
+        },
+        { "name": "Get session", "request": { "method": "GET", "url": "{{baseUrl}}/api/sessions/{{sessionId}}", "description": "Provider only; returns an owned session." } },
+        { "name": "Update session", "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"title\": \"{{sessionTitle}}\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{baseUrl}}/api/sessions/{{sessionId}}", "description": "Provider only. Partial update with title and/or startsAt." } },
+        { "name": "Archive session", "request": { "method": "DELETE", "url": "{{baseUrl}}/api/sessions/{{sessionId}}", "description": "Provider only. Archives an owned session." } },
+        { "name": "Get attendance register", "request": { "method": "GET", "url": "{{baseUrl}}/api/sessions/{{sessionId}}/attendance", "description": "Provider only. Returns session, active-enrolment records, and present/absent/excused/unrecorded counts." } },
+        { "name": "Record attendance", "request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"records\": [\n    { \"enrolmentId\": \"{{enrolmentId}}\", \"status\": \"present\" }\n  ]\n}", "options": { "raw": { "language": "json" } } }, "url": "{{baseUrl}}/api/sessions/{{sessionId}}/attendance", "description": "Provider only. 1–100 unique records. status: present, absent, or excused. Atomic upsert, scoped to active enrolments in this session's programme." } }
+      ]
+    },
+    {
+      "name": "Provider - Evidence Requirements",
+      "item": [
+        { "name": "List requirements", "request": { "method": "GET", "url": "{{baseUrl}}/api/programmes/{{programmeId}}/evidence-requirements", "description": "Provider only. Lists active checklist requirements for an owned programme." } },
+        {
+          "name": "Create requirement",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"title\": \"{{requirementTitle}}\",\n  \"guidance\": \"{{requirementGuidance}}\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{baseUrl}}/api/programmes/{{programmeId}}/evidence-requirements", "description": "Provider only. Title required (1–160 chars); optional guidance up to 2,000 chars." },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if (pm.response.code === 201) {", "  const body = pm.response.json();", "  if (body.requirement && body.requirement.id) pm.environment.set('requirementId', body.requirement.id);", "}"] } }]
+        },
+        { "name": "Get requirement", "request": { "method": "GET", "url": "{{baseUrl}}/api/programmes/{{programmeId}}/evidence-requirements/{{requirementId}}", "description": "Provider only; requirement must belong to the specified owned programme." } },
+        { "name": "Update requirement", "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"title\": \"{{requirementTitle}}\",\n  \"guidance\": \"{{requirementGuidance}}\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{baseUrl}}/api/programmes/{{programmeId}}/evidence-requirements/{{requirementId}}", "description": "Provider only. Partial update of title and/or guidance." } },
+        { "name": "Archive requirement", "request": { "method": "DELETE", "url": "{{baseUrl}}/api/programmes/{{programmeId}}/evidence-requirements/{{requirementId}}", "description": "Provider only. Archives the configured checklist item." } }
+      ]
+    },
+    {
+      "name": "Provider - Evidence Submissions",
+      "item": [
+        { "name": "Upload evidence file", "request": { "method": "POST", "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": "" }] }, "url": "{{baseUrl}}/api/enrolments/{{enrolmentId}}/evidence-requirements/{{requirementId}}/submissions", "description": "Provider only. Attach one PDF, JPEG, or PNG file (≤5 MB) in multipart field `file`. Postman will prompt you to choose a local file. New submissions start SUBMITTED. Resubmission is allowed only after CORRECTION_REQUIRED." },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if (pm.response.code === 201) {", "  const body = pm.response.json();", "  if (body.submission && body.submission.id) pm.environment.set('submissionId', body.submission.id);", "}"] } }]
+        },
+        { "name": "List enrolment evidence checklist", "request": { "method": "GET", "url": "{{baseUrl}}/api/enrolments/{{enrolmentId}}/evidence-submissions", "description": "Provider only. Returns requirements, latest submission/review, and completion counts." } },
+        { "name": "Get submission metadata", "request": { "method": "GET", "url": "{{baseUrl}}/api/evidence-submissions/{{submissionId}}", "description": "Provider only; submission must be owned by the authenticated provider." } },
+        { "name": "Get submission history", "request": { "method": "GET", "url": "{{baseUrl}}/api/evidence-submissions/{{submissionId}}/history", "description": "Provider only. Returns submission versions and review history for this evidence requirement." } },
+        { "name": "Download submission file", "request": { "method": "GET", "url": "{{baseUrl}}/api/evidence-submissions/{{submissionId}}/file", "description": "Provider only. Authorized private attachment download; response is file bytes, not JSON." } },
+        { "name": "Delete latest unreviewed submission", "request": { "method": "DELETE", "url": "{{baseUrl}}/api/evidence-submissions/{{submissionId}}", "description": "Provider only. Deletes only the latest unreviewed SUBMITTED version. Reviewed, approved, and older versions are protected." } }
+      ]
+    },
+    {
+      "name": "Administrator - Assessor Assignments",
+      "item": [
+        { "name": "List active assessors", "request": { "method": "GET", "url": "{{baseUrl}}/api/admin/assessors", "description": "Admin only. Returns active assessor accounts." } },
+        { "name": "List active programmes", "request": { "method": "GET", "url": "{{baseUrl}}/api/admin/programmes", "description": "Admin only. Returns active programmes and provider names." } },
+        { "name": "List assignment history", "request": { "method": "GET", "url": "{{baseUrl}}/api/admin/assessor-assignments", "description": "Admin only. Lists assignment records including inactive history." } },
+        {
+          "name": "Create assessor assignment",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"programmeId\": \"{{programmeId}}\",\n  \"assessorUserId\": \"{{assessorUserId}}\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{baseUrl}}/api/admin/assessor-assignments", "description": "Admin only. Both values are UUIDs. Duplicate active pair returns 409 ACTIVE_ASSIGNMENT_EXISTS." },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if (pm.response.code === 201) {", "  const body = pm.response.json();", "  if (body.assignment && body.assignment.id) pm.environment.set('assignmentId', body.assignment.id);", "}"] } }]
+        },
+        { "name": "Update assignment status", "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"status\": \"INACTIVE\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{baseUrl}}/api/admin/assessor-assignments/{{assignmentId}}", "description": "Admin only. Body status is ACTIVE or INACTIVE. Reassignment uses {assessorUserId} and preserves prior assignment history." } }
+      ]
+    },
+    {
+      "name": "Assessor - Review Workflow",
+      "item": [
+        { "name": "List assigned programmes", "request": { "method": "GET", "url": "{{baseUrl}}/api/assessor/programmes", "description": "Assessor only. Returns active assigned programmes and review counts." } },
+        { "name": "List programme learners", "request": { "method": "GET", "url": "{{baseUrl}}/api/assessor/programmes/{{programmeId}}/learners", "description": "Assessor only; requires active programme assignment." } },
+        { "name": "List programme submissions", "request": { "method": "GET", "url": "{{baseUrl}}/api/assessor/programmes/{{programmeId}}/submissions?status={{submissionStatus}}", "description": "Assessor only. status: all, SUBMITTED, APPROVED, CORRECTION_REQUIRED, UNDER_REVIEW. Lists latest submission per requirement." } },
+        { "name": "Get assigned submission", "request": { "method": "GET", "url": "{{baseUrl}}/api/assessor/submissions/{{submissionId}}", "description": "Assessor only; requires an active assignment to the submission programme." } },
+        { "name": "Download assigned evidence file", "request": { "method": "GET", "url": "{{baseUrl}}/api/assessor/submissions/{{submissionId}}/file", "description": "Assessor only. Authorized private attachment download." } },
+        { "name": "Get all submission versions", "request": { "method": "GET", "url": "{{baseUrl}}/api/assessor/submissions/{{submissionId}}/history", "description": "Assessor only; active assignment required. Returns all versions for the evidence requirement." } },
+        { "name": "Get review history", "request": { "method": "GET", "url": "{{baseUrl}}/api/assessor/submissions/{{submissionId}}/reviews", "description": "Assessor only; returns version-bound review decisions." } },
+        { "name": "Submit assessor decision", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"decision\": \"CORRECTION_REQUESTED\",\n  \"feedback\": \"{{reviewFeedback}}\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{baseUrl}}/api/assessor/submissions/{{submissionId}}/reviews", "description": "Assessor only. decision is APPROVED or CORRECTION_REQUESTED. Feedback is required for corrections (max 2,000 chars). Only the latest SUBMITTED version can be reviewed; decision is immutable." } }
+      ]
+    },
+    {
+      "name": "Learner Portal",
+      "item": [
+        { "name": "Get learner dashboard", "request": { "method": "GET", "url": "{{baseUrl}}/api/learner/dashboard", "description": "Learner only. Resolves the learner profile linked to the authenticated account and returns programme enrolments, attendance, evidence versions, learner-visible feedback, counts, and recent activity. No learner ID is accepted." } },
+        { "name": "List own programmes", "request": { "method": "GET", "url": "{{baseUrl}}/api/learner/programmes", "description": "Learner only. Lists programmes linked to the authenticated learner profile." } },
+        { "name": "Get own programme", "request": { "method": "GET", "url": "{{baseUrl}}/api/learner/programmes/{{programmeId}}", "description": "Learner only. Returns a programme only if linked to the authenticated learner." } }
+      ]
+    }
+  ]
+}

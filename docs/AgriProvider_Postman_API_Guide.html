@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AgriProvider Postman API Guide</title>
+  <style>
+    @page { size: A4; margin: 15mm 14mm 18mm; @bottom-left { content: "AgriProvider Postman API Guide · 10 November 2026"; color: #64736a; font: 8pt Arial, sans-serif; } @bottom-right { content: counter(page); color: #64736a; font: 8pt Arial, sans-serif; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #27382f; font: 9pt/1.45 Arial, Helvetica, sans-serif; }
+    h1, h2, h3 { color: #173f35; line-height: 1.2; }
+    h1 { margin: 0 0 5mm; font: 30pt/1.08 Georgia, serif; }
+    h2 { margin: 0 0 4mm; padding-bottom: 2mm; border-bottom: 1px solid #d5e0d9; font-size: 18pt; }
+    h3 { margin: 5mm 0 2mm; font-size: 11pt; }
+    p { margin: 2mm 0 3mm; }
+    code, pre { font-family: Consolas, "Courier New", monospace; }
+    code { color: #176f4c; font-size: 8pt; overflow-wrap: anywhere; }
+    pre { margin: 2mm 0 4mm; padding: 3mm; border: 1px solid #d5e0d9; border-radius: 2mm; background: #f4f8f5; font-size: 8pt; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .cover { min-height: 238mm; display: flex; flex-direction: column; justify-content: space-between; page-break-after: always; }
+    .brand { display: flex; align-items: center; gap: 3mm; color: #176f4c; font-weight: 700; }
+    .mark { width: 11mm; height: 11mm; display: grid; place-items: center; border-radius: 3mm; background: #176f4c; color: #fff; }
+    .eyebrow { color: #176f4c; font-size: 9pt; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; }
+    .subtitle { max-width: 145mm; color: #53645a; font-size: 13pt; }
+    .band { padding: 6mm; border-left: 3mm solid #176f4c; background: #f0f6f1; }
+    .page { page-break-before: always; }
+    table { width: 100%; margin: 3mm 0 5mm; border-collapse: collapse; font-size: 7.8pt; }
+    thead { display: table-header-group; }
+    tr { break-inside: avoid; page-break-inside: avoid; }
+    th { padding: 2mm; background: #e9f1eb; color: #173f35; text-align: left; vertical-align: top; }
+    td { padding: 2mm; border-bottom: 1px solid #dfe7e1; vertical-align: top; }
+    .method { width: 15mm; color: #176f4c; font-weight: 700; white-space: nowrap; }
+    .route { width: 76mm; }
+    .status { display: inline-block; margin: 1mm; padding: 1mm 2mm; border-radius: 99px; background: #e9f1eb; color: #176f4c; font-size: 7.5pt; font-weight: 700; }
+    .note { margin: 3mm 0; padding: 3mm 4mm; border-left: 1.2mm solid #d59435; background: #fff7e9; }
+    .danger { border-color: #b94a48; background: #fff2f0; }
+    .muted { color: #65756c; }
+    .small { font-size: 8pt; }
+    ul, ol { margin: 2mm 0 4mm; padding-left: 6mm; }
+    li { margin: 1.5mm 0; }
+    @media screen { body { max-width: 210mm; margin: 0 auto; padding: 16mm 14mm; } .cover { min-height: 265mm; } }
+  </style>
+</head>
+<body>
+  <section class="cover">
+    <div class="brand"><span class="mark">A</span><span>AgriProvider</span></div>
+    <div>
+      <div class="eyebrow">Postman collection guide</div>
+      <h1>API Requests<br>in Postman</h1>
+      <p class="subtitle">Setup instructions and endpoint reference for the AgriProvider Postman collection.</p>
+      <p class="muted">Version 1 · 10 November 2026 · API base URL: <code>http://localhost:5000</code></p>
+      <div class="band">
+        <strong>Import these files</strong>
+        <p><code>AgriProvider_API.postman_collection.json</code><br><code>AgriProvider_Local.postman_environment.json</code></p>
+        <p class="small">The collection contains 53 requests grouped by health/authentication, provider workflows, assessor review, administrator assignments, and the learner portal. The environment has blank credential and token fields; no secrets are included.</p>
+      </div>
+    </div>
+    <p class="small muted">This guide describes implemented API behavior only. It does not imply official QA, certification, eligibility, or payment functionality.</p>
+  </section>
+
+  <section>
+    <h2>Quick setup</h2>
+    <ol>
+      <li>Start the API from <code>server/</code> using <code>npm start</code>. Confirm <code>GET /health</code> returns a connected database.</li>
+      <li>In Postman, choose <strong>Import</strong> and import both JSON files from the repository <code>docs/</code> folder.</li>
+      <li>Select the <strong>AgriProvider Local</strong> environment in the top-right environment menu.</li>
+      <li>Enter test values into the environment’s <code>email</code>, <code>password</code>, and, for provider registration, <code>fullName</code>. Do not save real secrets in a shared export.</li>
+      <li>Send <strong>Health and Authentication → Login</strong>, or <strong>Register provider</strong> for a new provider account.</li>
+      <li>On successful login/registration, the collection test script stores <code>accessToken</code>, <code>userId</code>, and <code>userRole</code> in the selected environment. Other requests use the saved bearer token.</li>
+      <li>Create resources in order. Successful create requests save their IDs, such as <code>programmeId</code>, <code>learnerId</code>, <code>enrolmentId</code>, <code>sessionId</code>, and <code>requirementId</code>.</li>
+    </ol>
+    <div class="note danger"><strong>Requests can change data.</strong> Use an approved development database with synthetic records. Do not point mutating requests at production without explicit approval.</div>
+    <h3>Authentication behavior</h3>
+    <p>The collection uses bearer-token authentication for protected requests. Login and register are configured as public requests. The server issues a one-hour JWT for native/Postman usage. A successful account role is read from the database, not granted by a Postman variable.</p>
+    <p>Public registration creates <strong>provider accounts only</strong>. Learner, assessor, QA, and admin accounts must be provisioned through the approved server process. A learner login also needs an explicit or supported legacy profile link.</p>
+    <div class="note"><strong>Web-cookie flow:</strong> browser sessions use an HttpOnly cookie, exact <code>WEB_ORIGIN</code>, <code>X-Auth-Mode: cookie</code>, and credentialed requests. Postman examples use bearer tokens; the full cookie flow is covered in the API reference PDF.</div>
+    <h3>Environment variables</h3>
+    <p><code>baseUrl</code> defaults to <code>http://localhost:5000</code>. The environment also defines credentials, token, resource IDs, status filters, and request fields. Empty optional ID filters are omitted from list requests to avoid invalid UUID errors.</p>
+  </section>
+
+  <section class="page">
+    <h2>Postman request catalog</h2>
+    <h3>Health and authentication</h3>
+    <table><thead><tr><th class="method">Method</th><th class="route">Path</th><th>Role and behavior</th></tr></thead><tbody>
+      <tr><td>GET</td><td><code>/health</code></td><td>Public database health check.</td></tr>
+      <tr><td>POST</td><td><code>/api/auth/register</code></td><td>Public provider registration; returns user/token (bearer clients).</td></tr>
+      <tr><td>POST</td><td><code>/api/auth/login</code></td><td>Public sign-in; optional accountType validates but never changes stored role.</td></tr>
+      <tr><td>GET</td><td><code>/api/auth/me</code></td><td>Authenticated current-user profile.</td></tr>
+      <tr><td>POST</td><td><code>/api/auth/logout</code></td><td>Clears web cookie; bearer clients discard token locally.</td></tr>
+    </tbody></table>
+    <h3>Provider programmes, learners, enrolments</h3>
+    <table><thead><tr><th class="method">Method</th><th class="route">Path</th><th>Role and behavior</th></tr></thead><tbody>
+      <tr><td>GET / POST</td><td><code>/api/programmes</code></td><td>Provider: list active programmes / create with name and optional description.</td></tr>
+      <tr><td>GET / PATCH / DELETE</td><td><code>/api/programmes/:id</code></td><td>Provider: retrieve, update, or archive an owned programme.</td></tr>
+      <tr><td>GET</td><td><code>/api/learners</code></td><td>Provider: search/paginate; query supports q, status, limit, offset.</td></tr>
+      <tr><td>POST</td><td><code>/api/learners</code></td><td>Provider: create profile; possible duplicate returns 409 and confirmation code.</td></tr>
+      <tr><td>GET / PATCH / DELETE</td><td><code>/api/learners/:id</code></td><td>Provider: retrieve, update, or archive an owned learner; archive withdraws active enrolments.</td></tr>
+      <tr><td>GET</td><td><code>/api/enrolments</code></td><td>Provider: list with optional status, learnerId, programmeId, limit, offset filters.</td></tr>
+      <tr><td>POST</td><td><code>/api/enrolments</code></td><td>Provider: create same-provider enrolment using learnerId and programmeId.</td></tr>
+      <tr><td>GET</td><td><code>/api/enrolments/:id</code></td><td>Provider: retrieve owned enrolment.</td></tr>
+      <tr><td>PATCH</td><td><code>/api/enrolments/:id</code></td><td>Provider: set status to active or withdrawn.</td></tr>
+    </tbody></table>
+    <h3>Sessions and attendance</h3>
+    <table><thead><tr><th class="method">Method</th><th class="route">Path</th><th>Role and behavior</th></tr></thead><tbody>
+      <tr><td>GET / POST</td><td><code>/api/sessions</code></td><td>Provider: list (optional programmeId) / create with programmeId, title, timezone-bearing startsAt.</td></tr>
+      <tr><td>GET / PATCH / DELETE</td><td><code>/api/sessions/:id</code></td><td>Provider: retrieve, update, or archive session.</td></tr>
+      <tr><td>GET</td><td><code>/api/sessions/:id/attendance</code></td><td>Provider: active enrolment register and status summary.</td></tr>
+      <tr><td>PUT</td><td><code>/api/sessions/:id/attendance</code></td><td>Provider: atomically upsert records; status present, absent, or excused.</td></tr>
+    </tbody></table>
+  </section>
+
+  <section class="page">
+    <h2>Evidence and review catalog</h2>
+    <h3>Evidence requirements and submissions · provider</h3>
+    <table><thead><tr><th class="method">Method</th><th class="route">Path</th><th>Behavior</th></tr></thead><tbody>
+      <tr><td>GET / POST</td><td><code>/api/programmes/:programmeId/evidence-requirements</code></td><td>List or create configured checklist items.</td></tr>
+      <tr><td>GET / PATCH / DELETE</td><td><code>/api/programmes/:programmeId/evidence-requirements/:id</code></td><td>Retrieve, update, or archive a requirement.</td></tr>
+      <tr><td>POST</td><td><code>/api/enrolments/:enrolmentId/evidence-requirements/:requirementId/submissions</code></td><td>Multipart field <code>file</code>; PDF/JPEG/PNG ≤5 MB. New upload starts SUBMITTED.</td></tr>
+      <tr><td>GET</td><td><code>/api/enrolments/:enrolmentId/evidence-submissions</code></td><td>Checklist, latest versions, reviews, and completion counts.</td></tr>
+      <tr><td>GET</td><td><code>/api/evidence-submissions/:submissionId</code></td><td>Owned submission metadata.</td></tr>
+      <tr><td>GET</td><td><code>/api/evidence-submissions/:submissionId/history</code></td><td>All versions and associated reviews.</td></tr>
+      <tr><td>GET</td><td><code>/api/evidence-submissions/:submissionId/file</code></td><td>Private authorized file download.</td></tr>
+      <tr><td>DELETE</td><td><code>/api/evidence-submissions/:submissionId</code></td><td>Only latest unreviewed SUBMITTED version can be deleted.</td></tr>
+    </tbody></table>
+    <h3>Assessor review · active assignment required</h3>
+    <table><thead><tr><th class="method">Method</th><th class="route">Path</th><th>Behavior</th></tr></thead><tbody>
+      <tr><td>GET</td><td><code>/api/assessor/programmes</code></td><td>Assigned programmes and counts.</td></tr>
+      <tr><td>GET</td><td><code>/api/assessor/programmes/:programmeId/learners</code></td><td>Active enrolled learners.</td></tr>
+      <tr><td>GET</td><td><code>/api/assessor/programmes/:programmeId/submissions</code></td><td>Latest submissions; filter with status query.</td></tr>
+      <tr><td>GET</td><td><code>/api/assessor/submissions/:submissionId</code></td><td>Assigned submission details.</td></tr>
+      <tr><td>GET</td><td><code>/api/assessor/submissions/:submissionId/file</code></td><td>Private assigned evidence download.</td></tr>
+      <tr><td>GET</td><td><code>/api/assessor/submissions/:submissionId/history</code></td><td>All versions for assigned requirement.</td></tr>
+      <tr><td>GET</td><td><code>/api/assessor/submissions/:submissionId/reviews</code></td><td>Version-bound review history.</td></tr>
+      <tr><td>POST</td><td><code>/api/assessor/submissions/:submissionId/reviews</code></td><td>APPROVED or CORRECTION_REQUESTED; correction requires feedback. Latest SUBMITTED version only.</td></tr>
+    </tbody></table>
+    <div class="note">Review decisions are immutable and tied to the exact evidence version and assignment. Provider resubmission is correction-gated.</div>
+  </section>
+
+  <section class="page">
+    <h2>Admin, learner, and troubleshooting</h2>
+    <h3>Administrator assignments</h3>
+    <table><thead><tr><th class="method">Method</th><th class="route">Path</th><th>Behavior</th></tr></thead><tbody>
+      <tr><td>GET</td><td><code>/api/admin/assessors</code></td><td>List active assessors.</td></tr>
+      <tr><td>GET</td><td><code>/api/admin/programmes</code></td><td>List active programmes.</td></tr>
+      <tr><td>GET</td><td><code>/api/admin/assessor-assignments</code></td><td>Assignment history.</td></tr>
+      <tr><td>POST</td><td><code>/api/admin/assessor-assignments</code></td><td>Create using programmeId and assessorUserId UUIDs.</td></tr>
+      <tr><td>PATCH</td><td><code>/api/admin/assessor-assignments/:assignmentId</code></td><td>Set ACTIVE/INACTIVE or reassign using assessorUserId.</td></tr>
+    </tbody></table>
+    <h3>Learner portal</h3>
+    <table><thead><tr><th class="method">Method</th><th class="route">Path</th><th>Behavior</th></tr></thead><tbody>
+      <tr><td>GET</td><td><code>/api/learner/dashboard</code></td><td>Learner-only. Own linked profile, programmes, attendance, evidence versions, learner-visible feedback, counts, recent activity.</td></tr>
+      <tr><td>GET</td><td><code>/api/learner/programmes</code></td><td>List the caller's linked programmes.</td></tr>
+      <tr><td>GET</td><td><code>/api/learner/programmes/:id</code></td><td>Retrieve only a programme linked to the caller.</td></tr>
+    </tbody></table>
+    <h3>Common responses</h3>
+    <p><span class="status">400 Invalid request</span><span class="status">401 Sign-in required/rejected</span><span class="status">403 Role/origin denied</span><span class="status">404 Not found/in scope</span><span class="status">409 Conflict/state</span><span class="status">413 Too large</span><span class="status">429 Rate limited</span><span class="status">500 Internal error</span><span class="status">503 Service unavailable</span></p>
+    <ul>
+      <li>401 on login: check email/password and account active status. Error intentionally does not confirm whether an email exists.</li>
+      <li>403: verify the signed-in role and, for assessors, active assignment.</li>
+      <li>404: confirm resource IDs and that the caller owns or is assigned to the resource.</li>
+      <li>409: check duplicate, workflow state, or resubmission requirements.</li>
+      <li>503: check API/database connectivity and configured storage.</li>
+    </ul>
+    <div class="note danger"><strong>Not available through this API:</strong> learner uploads, notifications/announcements, QA decisions, official certification, eligibility calculations, payment execution, and external AgriSETA/government integration.</div>
+    <p class="small muted">For full field constraints, authentication cookie configuration, response details, and setup cautions, see <code>AgriProvider_API_Documentation.pdf</code> and <code>server/README.md</code>. API tests use an in-memory SQL stub; do not treat them as production database verification.</p>
+  </section>
+</body>
+</html>

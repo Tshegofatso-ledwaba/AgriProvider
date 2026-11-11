@@ -26,6 +26,10 @@ Run backend tests with `npm test`.
 
 The backend includes provider authentication and provider-scoped programme, learner, enrolment, training-session, attendance, evidence-checklist, and evidence-submission APIs, plus administrator-managed assessor assignment and assigned-assessor review APIs. Learner profiles use only the approved minimal fields: full name, generated internal reference, optional phone/email, and system-managed timestamps. Duplicate name/contact matches trigger a 409 warning which the provider can explicitly confirm. Archiving a learner withdraws their active enrolments while preserving history.
 
+### Learner workspace
+
+The authenticated `GET /api/learner/dashboard` endpoint is restricted to learner accounts. It resolves a learner profile using its explicit `learner_user_id` link, with a legacy email match only when that profile has no user link. Ambiguous profile matches return `409`; a learner cannot select another learner's ID. The response includes that learner's enrolments, provider names, recorded attendance, configured evidence requirements, all submission versions, and feedback linked to each version. The endpoint is read-only. The `migrations/202611090001_add_learner_user_link.sql` migration adds the profile link used by the endpoint and must be applied to a development database before deploying this dashboard; it has not been verified against PostgreSQL. Do not apply it to production without confirming and approving the target. Learner evidence uploads, notifications, announcements, QA verification, and official programme-completion state are not implemented.
+
 ## Provider programmes
 
 Provider accounts manage their own programmes through these authenticated endpoints:

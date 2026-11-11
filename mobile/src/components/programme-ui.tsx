@@ -1,4 +1,4 @@
-import { Href, Redirect, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
+import { Href, Link, Redirect, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
 import { PropsWithChildren, useState } from 'react';
 import {
   ActivityIndicator,
@@ -6,12 +6,14 @@ import {
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { SymbolView } from 'expo-symbols';
 
 import { UserRole, useAuth } from '@/providers/auth-provider';
 import { apiErrorText } from '@/services/api';
@@ -39,15 +41,26 @@ function backTargetForPath(
     return null;
   }
   if (pathname === '/explore') {
-    return role === 'assessor' ? '/assessor' : role === 'admin' ? '/admin' : role === 'qa' ? '/qa' : '/';
+    return role === 'assessor'
+      ? '/assessor'
+      : role === 'admin'
+        ? '/admin'
+        : role === 'qa'
+          ? '/qa'
+          : role === 'learner'
+            ? '/learner'
+            : '/';
   }
-  if (pathname === '/assessor' || pathname === '/admin' || pathname === '/qa') {
+  if (pathname === '/assessor' || pathname === '/admin' || pathname === '/qa' || pathname === '/learner') {
     return null;
   }
 
   const [section, second, third] = pathname.split('/').filter(Boolean);
   if (section === 'assessor') {
     return '/assessor';
+  }
+  if (section === 'learner') {
+    return '/learner';
   }
 
   if (['programmes', 'learners', 'enrolments', 'sessions'].includes(section ?? '')) {
@@ -81,6 +94,10 @@ export function AssessorOnly({ children }: PropsWithChildren) {
   return <RoleOnly roles={['assessor']}>{children}</RoleOnly>;
 }
 
+export function LearnerOnly({ children }: PropsWithChildren) {
+  return <RoleOnly roles={['learner']}>{children}</RoleOnly>;
+}
+
 export function AdminOnly({ children }: PropsWithChildren) {
   return <RoleOnly roles={['admin']}>{children}</RoleOnly>;
 }
@@ -109,7 +126,13 @@ function RoleOnly({ children, roles }: PropsWithChildren & { roles: UserRole[] }
 export function Page({
   children,
   keyboardAvoiding = false,
-}: PropsWithChildren & { keyboardAvoiding?: boolean }) {
+  onRefresh,
+  refreshing = false,
+}: PropsWithChildren & {
+  keyboardAvoiding?: boolean;
+  onRefresh?: () => void;
+  refreshing?: boolean;
+}) {
   const { user, credential, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuError, setMenuError] = useState('');
@@ -122,6 +145,9 @@ export function Page({
   >([]);
   const router = useRouter();
   const pathname = usePathname();
+  const learnerWorkspace = user?.role === 'learner';
+  const maxWidthClass = learnerWorkspace ? 'max-w-xl' : 'max-w-3xl';
+  const pageBackgroundClass = learnerWorkspace ? 'bg-[#F4F8F5]' : 'bg-[#F4F1ED]';
   const { learnerId, programmeId } = useGlobalSearchParams<{
     learnerId?: string;
     programmeId?: string;
@@ -152,10 +178,18 @@ export function Page({
               { label: 'Quality assurance', href: '/qa' },
               { label: 'Profile', href: '/explore' },
           ]
-          : [
-              { label: 'Dashboard', href: '/' },
-              { label: 'Profile', href: '/explore' },
-            ];
+          : user?.role === 'learner'
+            ? [
+                  { label: 'Home', href: '/learner' },
+                  { label: 'My programmes', href: '/learner/programmes' },
+                  { label: 'Attendance', href: '/learner/attendance' },
+                  { label: 'Evidence', href: '/learner/evidence' },
+                  { label: 'Profile', href: '/explore' },
+                ]
+            : [
+                { label: 'Dashboard', href: '/' },
+                { label: 'Profile', href: '/explore' },
+              ];
 
   const handleSignOut = async () => {
     setMenuOpen(false);
@@ -215,7 +249,7 @@ export function Page({
   const content = (
     <>
       <View className="relative z-20 px-4 pt-4">
-        <View className="mx-auto w-full max-w-3xl rounded-[24px] border border-border bg-white/90 px-3 py-2 shadow-sm shadow-black/5">
+        <View className={`mx-auto w-full ${maxWidthClass} rounded-[24px] border border-border bg-white/90 px-3 py-2 shadow-sm shadow-black/5`}>
           <View className="flex-row items-center gap-3">
             {backTarget ? (
               <Pressable
@@ -229,7 +263,13 @@ export function Page({
             ) : null}
             <View className="flex-row items-center gap-2">
               <View className="h-8 w-8 items-center justify-center rounded-xl bg-primary">
-                <Text className="text-xs font-extrabold text-white">A</Text>
+                {learnerWorkspace ? (
+                  <SymbolView
+                    name={{ ios: 'graduationcap.fill', android: 'school', web: 'school' }}
+                    size={17}
+                    tintColor="#FFFFFF"
+                  />
+                ) : <Text className="text-xs font-extrabold text-white">A</Text>}
               </View>
               <Text className="text-base font-extrabold text-ink">AgriProvider</Text>
             </View>
@@ -263,7 +303,33 @@ export function Page({
               </View>
             ) : null}
 
-            {user ? (
+            {learnerWorkspace ? (
+              <>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Notifications unavailable"
+                  accessibilityHint="Learner notifications are not available yet."
+                  accessibilityState={{ disabled: true }}
+                  className="h-10 w-10 items-center justify-center rounded-full"
+                  disabled>
+                  <SymbolView
+                    name={{ ios: 'bell', android: 'notifications', web: 'notifications' }}
+                    size={18}
+                    tintColor="#728078"
+                  />
+                </Pressable>
+                <Link href={routeHref('/explore')} asChild>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Open profile"
+                    className="h-10 w-10 items-center justify-center rounded-full bg-[#E4EFE8] active:opacity-70">
+                    <Text className="text-xs font-extrabold text-primary">
+                      {user.fullName.trim().split(/\s+/).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join('') || 'L'}
+                    </Text>
+                  </Pressable>
+                </Link>
+              </>
+            ) : user ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={menuOpen ? 'Close menu' : 'Open menu'}
@@ -310,7 +376,9 @@ export function Page({
                         ? 'Administrator'
                         : user.role === 'assessor'
                           ? 'Assessor'
-                          : 'Provider'}
+                          : user.role === 'learner'
+                            ? 'Learner'
+                            : 'Provider'}
                   </Text>
                 ) : null}
               </View>
@@ -380,18 +448,21 @@ export function Page({
       </View>
 
       <ScrollView
-        className="flex-1 bg-[#F4F1ED]"
-        contentContainerClassName={`mx-auto w-full max-w-3xl gap-5 px-5 pt-4 ${
+        className={`flex-1 ${pageBackgroundClass}`}
+        contentContainerClassName={`mx-auto w-full ${maxWidthClass} gap-5 px-5 pt-4 ${
           Platform.OS === 'web' ? 'pb-28' : 'pb-10'
         }`}
-        keyboardShouldPersistTaps="handled">
+        keyboardShouldPersistTaps="handled"
+        refreshControl={onRefresh
+          ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          : undefined}>
         {children}
       </ScrollView>
     </>
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-[#F4F1ED]">
+    <SafeAreaView className={`flex-1 ${pageBackgroundClass}`}>
       {keyboardAvoiding ? (
         <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           {content}

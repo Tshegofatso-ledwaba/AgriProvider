@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { Link, useFocusEffect } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 
 import {
@@ -11,6 +11,7 @@ import {
   LoadingNotice,
   Page,
   PageTitle,
+  routeHref,
 } from '@/components/programme-ui';
 import { useAuth } from '@/providers/auth-provider';
 import { apiErrorText } from '@/services/api';
@@ -146,6 +147,11 @@ function AdminAssignments() {
   return (
     <Page>
       <PageTitle title="Administrator workspace" subtitle="Manage assessor access and programme assignments." />
+      <Link href={routeHref('/admin/qa-assignments')} asChild>
+        <Pressable accessibilityRole="button" className="min-h-11 items-center justify-center self-start rounded-xl border border-border bg-white px-4 py-3 active:opacity-80">
+          <Text className="text-sm font-bold text-ink">Manage QA programme access</Text>
+        </Pressable>
+      </Link>
       <ConfirmDialog
         visible={confirmation !== null}
         title={confirmation?.title ?? ''}

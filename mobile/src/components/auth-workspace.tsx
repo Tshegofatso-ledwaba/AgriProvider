@@ -21,6 +21,7 @@ const signInTypes: { role: UserRole; label: string }[] = [
   { role: 'assessor', label: 'Assessor' },
   { role: 'qa', label: 'QA officer' },
   { role: 'admin', label: 'Administrator' },
+  { role: 'learner', label: 'Learner' },
 ];
 
 export default function AuthWorkspace() {
@@ -158,7 +159,7 @@ export default function AuthWorkspace() {
                   })}
                 </View>
                 <Text className="text-xs leading-5 text-muted">
-                  Choose the type of your existing account. Assessor, QA and administrator accounts are provisioned by an administrator.
+                  The role assigned to your account determines workspace access.
                 </Text>
               </View>
             ) : null}

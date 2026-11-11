@@ -20,7 +20,7 @@ import {
 
 const sessionKey = 'agriprovider.access-token';
 
-export type UserRole = 'provider' | 'assessor' | 'qa' | 'admin';
+export type UserRole = 'provider' | 'assessor' | 'qa' | 'admin' | 'learner';
 
 export type AuthUser = {
   id: string;
@@ -40,7 +40,7 @@ type AuthContextValue = {
   isLoading: boolean;
   isBusy: boolean;
   sessionError: string;
-  signIn: (email: string, password: string, accountType: UserRole) => Promise<void>;
+  signIn: (email: string, password: string, accountType?: UserRole) => Promise<void>;
   register: (fullName: string, email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   clearSessionError: () => void;
@@ -53,7 +53,7 @@ function isUser(value: unknown): value is AuthUser {
     && typeof value.id === 'string'
     && typeof value.fullName === 'string'
     && typeof value.email === 'string'
-    && (value.role === 'provider' || value.role === 'assessor' || value.role === 'qa' || value.role === 'admin');
+    && (value.role === 'provider' || value.role === 'assessor' || value.role === 'qa' || value.role === 'admin' || value.role === 'learner');
 }
 
 function isAuthResult(value: unknown): value is AuthResult {
@@ -168,12 +168,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string, accountType: UserRole) => {
-    await authenticate('login', { email, password, accountType });
+  const signIn = useCallback(async (email: string, password: string, accountType?: UserRole) => {
+    await authenticate('login', { email, password, ...(accountType ? { accountType } : {}) });
   }, [authenticate]);
 
   const register = useCallback(async (fullName: string, email: string, password: string) => {
-    await authenticate('register', { fullName, email, password, accountType: 'provider' });
+    await authenticate('register', { fullName, email, password });
   }, [authenticate]);
 
   const signOut = useCallback(async () => {

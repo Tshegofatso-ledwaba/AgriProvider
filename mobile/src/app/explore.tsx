@@ -18,7 +18,9 @@ export default function ExploreScreen() {
         ? 'Quality assurance'
         : user?.role === 'admin'
           ? 'Administrator'
-          : 'Workspace user';
+          : user?.role === 'learner'
+            ? 'Learner'
+            : 'Workspace user';
 
   return (
     <Page>

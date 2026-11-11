@@ -33,6 +33,8 @@ AgriProvider supports agricultural training-provider administration and quality-
 
 Treat the above as the project direction, not permission to invent formal regulatory rules. The exact workflow, fields, statuses, and acceptance criteria must follow the approved brief and mentor decisions.
 
+AgriProvider must support five distinct, integrated roles: **Provider, Administrator, Assessor, QA Officer, and Learner**. QA Officer and Learner workspaces are mandatory product areas, not optional demo screens. Their implementation must use the existing application, database, API, authentication, and navigation; do not create a separate application. A workspace may remain explicitly blocked only where a required policy, permission, or workflow decision has not been approved, and must not imply that the blocked workflow is functional.
+
 ### In scope
 
 Implement the following where required by the approved project brief and current milestone:
@@ -46,6 +48,8 @@ Implement the following where required by the approved project brief and current
 - **Completeness checks:** identify missing or incomplete required evidence using configurable or explicitly approved requirements; explain what is missing.
 - **Assessment and moderation:** provide authorised review actions, comments, decisions, and correction/resubmission flows supported by the brief.
 - **Quality assurance:** allow authorised QA users to verify or return records according to confirmed workflow rules.
+- **QA Officer workspace:** provide a separate, authenticated, database-backed workspace for authorised QA review, findings, corrective actions, and history according to approved rules and access scope. Do not treat the QA role as an assessor or provider role.
+- **Learner workspace:** provide a separate, authenticated, database-backed workspace for the learner's own linked profile, programmes, view-only attendance, evidence requirements and submissions, permitted assessor feedback, and authorised high-level QA/eligibility status where those records exist.
 - **Certification tracking:** show progress, outstanding requirements, and recorded certification status; do not claim a certificate is officially issued unless that capability is approved and implemented.
 - **Milestone eligibility:** calculate or display eligibility only from explicit, approved conditions and recorded workflow data. Keep eligibility separate from actual payment execution.
 - **Dashboards and work queues:** show useful counts, pending actions, incomplete records, and statuses derived from real API/database data.
@@ -70,16 +74,19 @@ Do not implement or imply any of the following without a confirmed requirement a
 - Replacing the chosen stack, introducing major new infrastructure, or adding dependencies without a clear need.
 - Building every possible feature suggested in draft strategy documents simply because it appears there. A draft handbook is reference material, not proof that every item is an approved deliverable.
 
+QA and learner modules remain required parts of the product. Missing approval for a QA transition, eligibility rule, certification condition, or data visibility decision blocks only that specific capability; it is not permission to replace a required module with a misleading placeholder or fake workflow. Provide a clear unavailable state until the missing decision is approved, then implement the capability within its approved scope.
+
 If a request appears to expand scope, identify the change and its impact before proceeding. Keep a clear distinction between implemented functionality, mocked demonstrations, and future work.
 
 ## 3. Roles, permissions, and workflow
 
-The project currently uses these working role concepts:
+The project supports five distinct role concepts:
 
 - **Provider:** manages the provider's permitted records, programmes/cohorts, learner enrolments, attendance, and evidence submissions.
 - **Assessor:** reviews assigned submissions or evidence, records findings, and requests corrections or records decisions where permitted.
-- **QA officer:** performs the authorised quality-assurance checks and records verification outcomes.
+- **QA Officer:** independently checks the quality and completeness of assessment records, records authorised QA outcomes, creates and tracks findings/corrective actions, and reviews their resolution. QA Officers do not make or overwrite assessor decisions.
 - **Administrator:** provisions and manages assessor-to-programme assignments. Administrator accounts are created only through the trusted server CLI, never public registration.
+- **Learner:** uses an individual account linked to a provider-created learner profile; views only their own linked programme enrolments, attendance, evidence, permitted feedback, notifications, and learner-visible workflow status.
 
 These are working role descriptions. Inspect the approved requirements and existing implementation for exact permissions. Do not assume that every user can access every provider, learner, file, or decision.
 
@@ -94,6 +101,27 @@ Rules:
 - Keep assessor decisions immutable and linked to the exact evidence submission version; preserve prior assignment and review history when reassigned or resubmitted.
 - Show the user what action is needed next, without exposing records they are not authorised to see.
 - If the exact status names or transition rules are not confirmed, inspect the brief and code and ask the mentor rather than inventing a final workflow.
+
+### QA Officer requirements
+
+- Keep QA authentication, workspace, API permissions, and records distinct from assessor review and provider management.
+- Where approved, provide a real QA work queue and details backed by assessment, evidence-version, and assignment records. Enforce the QA Officer's approved provider/programme scope on the server.
+- Allow inspection of relevant learner/programme/enrolment context, evidence versions, assessor decisions and feedback, and assessment history without altering the underlying assessment decision.
+- Support QA outcomes, findings, corrective actions, assignments, due dates, response review, reopening, and closure only where the authorized workflow, fields, visibility, and transitions have been confirmed.
+- Preserve QA decision and corrective-action history. Do not make up QA criteria, severity scales, overdue rules, regulatory outcomes, or transitions.
+- Keep internal QA findings and discussions private from learners unless an explicit learner-visible summary is approved. Never expose unrelated provider or learner records.
+- A QA dashboard must use persisted records and include loading, empty, error, and success states. An informational disabled state is acceptable only for capabilities blocked by missing approval/backend support; do not describe the QA module itself as optional or complete.
+
+### Learner account and workspace requirements
+
+- Provider-created learner profiles are the source record. A learner login must be securely linked to exactly one authorized learner profile; public learner registration must not create unlinked or duplicate learner identities.
+- Keep public registration provider-only. Create or activate learner accounts through an approved trusted invitation/provisioning flow; never let a client choose a learner ID or link itself to another person's profile.
+- Enforce learner ownership on every backend read and write. A learner can access only their linked profile and its authorized enrolments, attendance, evidence, feedback, and learner-visible workflow status.
+- Support multiple programme enrolments and useful empty states when the learner has none. Derive progress from actual records and approved configured rules; do not invent percentages or mark stages complete because a screen exists.
+- Learners may view their attendance but may not create, edit, or delete attendance. They may not alter enrolments, assessor decisions, QA outcomes, or provider-managed records.
+- Learner evidence uploads are available only when explicitly enabled and implemented with server-side file validation, ownership checks, version history, and assessor workflow integration. Otherwise clearly state that the provider manages uploads.
+- Show only learner-authorized assessor feedback and high-level QA/certification/eligibility information. Do not expose internal QA notes, private findings, assessor discussions, or administrative records.
+- Provide a complete learner post-login destination and working role-specific navigation; do not redirect a learner into the provider dashboard or leave protected routes blank.
 
 ## 4. Technology and architecture
 

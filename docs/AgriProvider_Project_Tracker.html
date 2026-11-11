@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AgriProvider Project Tracker</title>
+  <style>
+    @page { size: A4; margin: 15mm 14mm 18mm; @bottom-left { content: "AgriProvider Project Tracker · 10 November 2026"; color: #64736a; font: 8pt Arial, sans-serif; } @bottom-right { content: counter(page); color: #64736a; font: 8pt Arial, sans-serif; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #27382f; font: 9pt/1.45 Arial, Helvetica, sans-serif; }
+    h1, h2, h3 { color: #173f35; line-height: 1.2; }
+    h1 { margin: 0 0 5mm; font: 31pt/1.06 Georgia, serif; }
+    h2 { margin: 0 0 4mm; padding-bottom: 2mm; border-bottom: 1px solid #d5e0d9; font-size: 18pt; }
+    h3 { margin: 5mm 0 2mm; font-size: 11pt; }
+    p { margin: 2mm 0 3mm; }
+    code { color: #176f4c; font: 8pt Consolas, "Courier New", monospace; overflow-wrap: anywhere; }
+    .cover { min-height: 238mm; display: flex; flex-direction: column; justify-content: space-between; page-break-after: always; }
+    .brand { display: flex; align-items: center; gap: 3mm; color: #176f4c; font-weight: 700; }
+    .brand-mark { width: 11mm; height: 11mm; display: grid; place-items: center; border-radius: 3mm; background: #176f4c; color: white; font-weight: 700; }
+    .eyebrow { color: #176f4c; font-size: 9pt; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
+    .subtitle { max-width: 145mm; color: #52635a; font-size: 13pt; }
+    .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; margin: 8mm 0; }
+    .stat { min-height: 25mm; padding: 4mm; border: 1px solid #d7e2da; border-radius: 2mm; background: #fff; }
+    .stat strong { display: block; margin-bottom: 1mm; color: #176f4c; font-size: 15pt; }
+    .band { padding: 6mm; border-left: 3mm solid #176f4c; background: #f0f6f1; }
+    .status { display: inline-block; padding: 1mm 2mm; border-radius: 99px; font-size: 7.4pt; font-weight: 700; white-space: nowrap; }
+    .done { background: #e8f4ec; color: #1c6a43; }
+    .partial { background: #fff4df; color: #87590c; }
+    .blocked { background: #fdebe8; color: #98423d; }
+    .planned { background: #edf0ef; color: #54635a; }
+    .muted { color: #65756c; }
+    .section { margin-bottom: 7mm; }
+    .page { page-break-before: always; }
+    table { width: 100%; margin: 3mm 0 5mm; border-collapse: collapse; font-size: 7.7pt; }
+    thead { display: table-header-group; }
+    tr { break-inside: avoid; page-break-inside: avoid; }
+    th { padding: 2.2mm; background: #e9f1eb; color: #173f35; text-align: left; vertical-align: top; }
+    td { padding: 2.1mm; border-bottom: 1px solid #dfe7e1; vertical-align: top; }
+    .workstream { width: 27mm; font-weight: 700; }
+    .state { width: 29mm; }
+    .evidence { width: 57mm; }
+    .next { width: 62mm; }
+    ul { margin: 1mm 0 3mm; padding-left: 5mm; }
+    li { margin: 1.5mm 0; }
+    .note { margin: 3mm 0; padding: 3mm 4mm; border-left: 1.2mm solid #d59435; background: #fff7e9; }
+    .small { font-size: 8pt; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+    .card { padding: 4mm; border: 1px solid #d7e2da; border-radius: 2mm; }
+    .footnote { margin-top: 5mm; color: #65756c; font-size: 8pt; }
+    @media screen { body { max-width: 210mm; margin: 0 auto; padding: 16mm 14mm; } .cover { min-height: 265mm; } }
+  </style>
+</head>
+<body>
+  <section class="cover">
+    <div class="brand"><span class="brand-mark">A</span><span>AgriProvider</span></div>
+    <div>
+      <div class="eyebrow">Delivery status · 10 November 2026</div>
+      <h1>Project<br>Tracker</h1>
+      <p class="subtitle">A source-based view of implemented workflows, verification status, open dependencies, and decisions needed before later phases.</p>
+      <div class="summary">
+        <div class="stat"><strong>Core workflows</strong><span>Provider operations through assessor review are implemented.</span></div>
+        <div class="stat"><strong>62 API tests</strong><span>Latest recorded suite passes; tests use an in-memory SQL stub.</span></div>
+        <div class="stat"><strong>Production gates</strong><span>Durable private storage and live database verification remain.</span></div>
+      </div>
+      <div class="band">
+        <strong>Overall status: Core workflow implemented; pre-production hardening and later approved workflows remain.</strong>
+        <p>Production Neon was not accessed or changed. No QA outcome, certification, eligibility condition, or payment behavior is assumed by this tracker.</p>
+      </div>
+    </div>
+    <p class="small muted">Owners and target dates are not recorded in the repository and are therefore listed as unassigned / not scheduled.</p>
+  </section>
+
+  <section class="section">
+    <h2>Workstream status</h2>
+    <p><span class="status done">Implemented</span> <span class="status partial">Partial</span> <span class="status blocked">Blocked / unverified</span> <span class="status planned">Not implemented</span></p>
+    <table>
+      <thead><tr><th class="workstream">Workstream</th><th class="state">Status</th><th class="evidence">Verified scope / evidence</th><th class="next">Next action</th></tr></thead>
+      <tbody>
+        <tr><td class="workstream">Authentication & roles</td><td><span class="status done">Implemented</span></td><td>Provider registration, login, sign-out, token/cookie sessions, protected routes, server role checks, trusted privileged-user provisioning.</td><td>Confirm deployment and account-recovery procedures before production.</td></tr>
+        <tr><td class="workstream">Programmes</td><td><span class="status done">Implemented</span></td><td>Provider-scoped create, list, detail, update, and archive with ownership enforcement and validation.</td><td>Complete PostgreSQL-backed verification; dedicated programme progress calculations remain undefined.</td></tr>
+        <tr><td class="workstream">Learners</td><td><span class="status partial">Implemented; live DB unverified</span></td><td>Provider-scoped profile CRUD, search, pagination, duplicate warning, archive; learner portal reads linked programme, attendance, evidence, history, and feedback.</td><td>Verify learner-link migration on a disposable development database; no production migration without approval.</td></tr>
+        <tr><td class="workstream">Enrolments</td><td><span class="status done">Implemented</span></td><td>Create/list/detail, withdrawal/reactivation, history preservation, one-active-enrolment constraint.</td><td>Add PostgreSQL integration coverage for constraints and transitions.</td></tr>
+        <tr><td class="workstream">Attendance</td><td><span class="status done">Implemented</span></td><td>Session scheduling/edit/archive, register, history, atomic present/absent/excused recording; learner view is read-only.</td><td>Add PostgreSQL integration coverage and device-level navigation checks.</td></tr>
+        <tr><td class="workstream">Evidence checklists</td><td><span class="status done">Implemented</span></td><td>Provider-configured title/guidance requirements; no invented official checklist items.</td><td>Maintain checklist configuration as provider-managed; formal requirements need approval.</td></tr>
+        <tr><td class="workstream">Evidence submissions</td><td><span class="status partial">Implemented; production storage blocked</span></td><td>Provider-only PDF/JPEG/PNG uploads ≤5 MB, private metadata, version history, controlled reads, correction-gated resubmission, restricted deletion.</td><td>Choose private durable storage, retention/deletion policy, and migration plan before production.</td></tr>
+        <tr><td class="workstream">Assessor assignment & review</td><td><span class="status done">Implemented</span></td><td>Admin-only assignment/reassignment/deactivation; assigned queues and file access; immutable version-bound decisions and feedback.</td><td>Extend PostgreSQL integration tests for concurrent review and assignment changes.</td></tr>
+        <tr><td class="workstream">QA workflow</td><td><span class="status partial">UI shell only</span></td><td>Role-restricted informational workspace; no QA decisions or records are simulated.</td><td>Approve assignment scope, decision options, and return/review procedure before implementation.</td></tr>
+        <tr><td class="workstream">Certification & eligibility</td><td><span class="status planned">Not implemented</span></td><td>No official certification status, eligibility formula, or payment execution is represented.</td><td>Implement only after exact requirements and authorized decision-makers are approved.</td></tr>
+        <tr><td class="workstream">Notifications & audit</td><td><span class="status planned">Not implemented</span></td><td>Activity is derived from attendance/submission/review records; notifications and full audit history are absent.</td><td>Define notification events, visibility rules, audit scope, and retention.</td></tr>
+        <tr><td class="workstream">Golden journey</td><td><span class="status partial">Partial coverage</span></td><td>HTTP API and authorization tests cover key modules; the test suite uses an in-memory SQL stub.</td><td>Run end-to-end journey and live PostgreSQL integration tests on an approved disposable database.</td></tr>
+      </tbody>
+    </table>
+    <p class="small muted">Migration status: migrations 1–8 are recorded as applied on the confirmed disposable Neon test database. Migration 9 (learner-user link) is not verified against PostgreSQL. Production Neon was not accessed.</p>
+  </section>
+
+  <section class="page section">
+    <h2>Next actions</h2>
+    <p>Sequenced from the repository roadmap; owners and dates require project assignment.</p>
+    <table>
+      <thead><tr><th style="width:10mm">Order</th><th style="width:67mm">Action</th><th style="width:26mm">Status</th><th>Acceptance evidence</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Add PostgreSQL integration tests for constraints, version-bound reviews, and concurrent assignment/review operations.</td><td><span class="status planned">Open</span></td><td>Tests execute against a disposable database, not only the in-memory stub.</td></tr>
+        <tr><td>2</td><td>Verify learner-link migration and learner account-to-profile association on an approved disposable development database.</td><td><span class="status blocked">Unverified</span></td><td>Migration and dashboard lookup pass for linked, unlinked, and ambiguous profile cases.</td></tr>
+        <tr><td>3</td><td>Select and configure private durable evidence storage, with controlled downloads and a local-file migration plan.</td><td><span class="status blocked">Decision needed</span></td><td>Production storage adapter, access checks, deletion/retention behavior, and migration procedure are reviewed.</td></tr>
+        <tr><td>4</td><td>Confirm deployment process for trusted administrator provisioning and account recovery.</td><td><span class="status blocked">Decision needed</span></td><td>Documented operational procedure; no privileged public signup.</td></tr>
+        <tr><td>5</td><td>Complete QA workflow after authorized scope and transition rules are approved.</td><td><span class="status blocked">Requirements needed</span></td><td>Approved assignment, review, return, audit, and permission rules with API tests.</td></tr>
+        <tr><td>6</td><td>Complete mobile role navigation, responsive review, notifications, and end-to-end golden journey testing.</td><td><span class="status partial">Partial</span></td><td>Provider, learner, assessor, admin, and QA paths tested across target device sizes; unavailable features remain clearly identified.</td></tr>
+        <tr><td>7</td><td>Consider certification and milestone eligibility only after official conditions and authority are confirmed.</td><td><span class="status planned">Deferred</span></td><td>Approved explainable rules; eligibility separated from any payment execution.</td></tr>
+      </tbody>
+    </table>
+    <div class="note"><strong>Release gate:</strong> local evidence storage is development-only. Do not deploy production uploads until private durable storage, access controls, retention, and recovery are confirmed.</div>
+  </section>
+
+  <section class="page section">
+    <h2>Verification & decisions</h2>
+    <div class="row">
+      <div class="card">
+        <h3>Current verification</h3>
+        <ul>
+          <li>Backend API suite: 62 tests passed in the latest recorded run.</li>
+          <li>Mobile lint: passed.</li>
+          <li>TypeScript no-emit check: passed.</li>
+          <li>API tests use an in-memory SQL stub and do not verify live PostgreSQL behavior.</li>
+          <li>Migrations 1–8 were verified on disposable Neon; migration 9 remains unverified.</li>
+          <li>Production database and storage were not accessed.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Decisions required</h3>
+        <ul>
+          <li>Private durable evidence storage and handling of existing local files.</li>
+          <li>POPIA-related consent, retention, correction, access, and deletion process.</li>
+          <li>QA assignment scope and permitted decisions/transitions.</li>
+          <li>Certification fields and authorized source for status.</li>
+          <li>Explicit milestone-eligibility conditions.</li>
+          <li>Notification and immutable audit scope.</li>
+        </ul>
+      </div>
+    </div>
+    <h3>Project controls</h3>
+    <table>
+      <tbody>
+        <tr><th style="width:45mm">Tracker date</th><td>10 November 2026</td></tr>
+        <tr><th>Owners</th><td>Not recorded; assign through the project workflow.</td></tr>
+        <tr><th>Target dates</th><td>Not recorded; no dates inferred.</td></tr>
+        <tr><th>Source</th><td><code>docs/ROADMAP.md</code>, root README, test-case document, API implementation, migration notes, and recorded checks.</td></tr>
+        <tr><th>Scope rule</th><td>Do not invent regulatory, certification, eligibility, funding, or payment requirements.</td></tr>
+      </tbody>
+    </table>
+    <div class="band">
+      <strong>Current project state</strong>
+      <p>The provider-to-assessor evidence workflow is substantially implemented. The remaining work is primarily database/integration assurance, production storage readiness, and approved QA or certification requirements.</p>
+    </div>
+    <p class="footnote">AgriProvider Project Tracker · Version 1 · 10 November 2026</p>
+  </section>
+</body>
+</html>

@@ -185,6 +185,41 @@ export async function downloadFile(path: string, token: string): Promise<Uint8Ar
   });
 }
 
+export async function downloadPrivateFile(path: string, token: string): Promise<Uint8Array> {
+  if (Platform.OS !== 'web') {
+    return downloadFile(path, token);
+  }
+  if (!apiBaseUrl) {
+    throw new ApiError('Set EXPO_PUBLIC_API_URL in mobile/.env and restart Expo.');
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl}${path}`, {
+      headers: { Accept: 'application/octet-stream', 'X-Auth-Mode': 'cookie' },
+      credentials: 'include',
+    });
+  } catch {
+    throw new ApiError('Could not reach the API. Check the server and your network connection.');
+  }
+
+  if (!response.ok) {
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+    if (response.status === 401) await unauthorizedHandler?.();
+    const message = isRecord(payload) && typeof payload.error === 'string'
+      ? payload.error
+      : 'The API could not retrieve this file.';
+    throw new ApiError(message, response.status);
+  }
+
+  return new Uint8Array(await response.arrayBuffer());
+}
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }

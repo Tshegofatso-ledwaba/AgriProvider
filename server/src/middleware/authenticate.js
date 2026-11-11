@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 
-const allowedRoles = new Set(['provider', 'assessor', 'qa', 'admin']);
+const allowedRoles = new Set(['provider', 'assessor', 'qa', 'admin', 'learner']);
 
 function authenticate(database, jwtSecret) {
   return async (request, response, next) => {

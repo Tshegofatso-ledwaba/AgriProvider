@@ -7,8 +7,10 @@ const { createEvidenceRequirementsRouter } = require('./evidence-requirements');
 const { createEvidenceReviewsRouter } = require('./evidence-reviews');
 const { createEvidenceSubmissionsRouter } = require('./evidence-submissions');
 const { createLocalEvidenceStorage } = require('./storage/local-evidence-storage');
+const { createLearnerPortalRouter } = require('./learner-portal');
 const { createLearnersRouter } = require('./learners');
 const { createProgrammesRouter } = require('./programmes');
+const { createQaAdminRouter, createQaRouter } = require('./qa');
 const { createSessionsRouter } = require('./sessions');
 const { isDatabaseConnectionError } = require('./database');
 
@@ -65,7 +67,10 @@ function createApp(database, { jwtSecret, evidenceStorage, webOrigin }) {
     secureCookies: process.env.NODE_ENV === 'production',
   }));
   app.use('/api/admin', createAssessorAssignmentsRouter({ database, jwtSecret }));
+  app.use('/api/admin', createQaAdminRouter({ database, jwtSecret }));
   app.use('/api/assessor', createEvidenceReviewsRouter({ database, jwtSecret, evidenceStorage: configuredEvidenceStorage }));
+  app.use('/api/learner', createLearnerPortalRouter({ database, jwtSecret }));
+  app.use('/api/qa', createQaRouter({ database, jwtSecret, evidenceStorage: configuredEvidenceStorage }));
   app.use('/api/enrolments', createEnrolmentsRouter({ database, jwtSecret }));
   app.use('/api', createEvidenceSubmissionsRouter({
     database,
@@ -104,6 +109,9 @@ function createApp(database, { jwtSecret, evidenceStorage, webOrigin }) {
     }
     if (error.status === 413) {
       return response.status(413).json({ error: 'Request body is too large.' });
+    }
+    if (error.status === 409) {
+      return response.status(409).json({ error: error.message });
     }
     if (isDatabaseConnectionError(error)) {
       console.error('Database connection unavailable:', error.code || error.name);

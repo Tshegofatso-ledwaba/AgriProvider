@@ -1,7 +1,7 @@
 ALTER TABLE users
   DROP CONSTRAINT users_role_check,
   ADD CONSTRAINT users_role_check
-    CHECK (role IN ('provider', 'assessor', 'qa', 'admin'));
+    CHECK (role IN ('provider', 'assessor', 'qa', 'admin', 'learner'));
 
 ALTER TABLE evidence_submissions
   ADD CONSTRAINT evidence_submissions_id_version_unique UNIQUE (id, version);

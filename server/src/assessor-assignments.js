@@ -77,9 +77,9 @@ function createAssessorAssignmentsRouter({ database, jwtSecret }) {
     try {
       const { rows } = await database.query(
         `INSERT INTO programme_assessor_assignments (
-           id, programme_id, assessor_user_id, created_by
+           id, programme_id, assessor_user_id, created_by, updated_by
          )
-         SELECT $1, p.id, assessor.id, $4
+         SELECT $1, p.id, assessor.id, $4, $4
          FROM programmes p
          JOIN users assessor ON assessor.id = $3
            AND assessor.role = 'assessor' AND assessor.is_active = TRUE
@@ -149,18 +149,18 @@ function createAssessorAssignmentsRouter({ database, jwtSecret }) {
         }
         const { rows: newRows } = await client.query(
           `INSERT INTO programme_assessor_assignments (
-             id, programme_id, assessor_user_id, created_by
-           ) VALUES ($1, $2, $3, $4)
+               id, programme_id, assessor_user_id, created_by, updated_by
+             ) VALUES ($1, $2, $3, $4, $4)
            RETURNING id, programme_id, assessor_user_id, created_by,
              status, created_at, updated_at, deactivated_at`,
           [randomUUID(), current.programme_id, body.assessorUserId, request.auth.userId],
         );
         const { rows: deactivatedRows } = await client.query(
           `UPDATE programme_assessor_assignments
-           SET status = 'INACTIVE', deactivated_at = NOW(), updated_at = NOW()
+           SET status = 'INACTIVE', deactivated_at = NOW(), updated_by = $2, updated_at = NOW()
            WHERE id = $1 AND status = 'ACTIVE'
            RETURNING id`,
-          [current.id],
+          [current.id, request.auth.userId],
         );
         if (!deactivatedRows[0]) throw Object.assign(new Error('Assignment changed before reassignment.'), { status: 409 });
         await client.query('COMMIT');
@@ -194,13 +194,13 @@ function createAssessorAssignmentsRouter({ database, jwtSecret }) {
     try {
       const { rows } = await database.query(
         `UPDATE programme_assessor_assignments
-         SET status = $1,
+         SET status = $1, updated_by = $3,
            deactivated_at = CASE WHEN $1 = 'INACTIVE' THEN COALESCE(deactivated_at, NOW()) ELSE NULL END,
            updated_at = NOW()
          WHERE id = $2
          RETURNING id, programme_id, assessor_user_id, created_by,
            status, created_at, updated_at, deactivated_at`,
-        [body.status, request.params.assignmentId],
+        [body.status, request.params.assignmentId, request.auth.userId],
       );
       if (!rows[0]) return response.status(404).json({ error: 'Assessor assignment not found.' });
       return response.json({ assignment: rows[0] });
