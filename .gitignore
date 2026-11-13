@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Local environment files
+.env
+.env.*
+server/.env
+mobile/.env
+mobile/.env.*
+
+# Editor settings
+.vscode/
+.idea/
+
+# Build and cache output
+coverage/
+dist/
+build/
+.expo/
+web-build/
+*.log
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db

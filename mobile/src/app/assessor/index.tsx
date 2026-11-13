@@ -4,12 +4,13 @@ import { Pressable, Text, View } from 'react-native';
 
 import {
   AssessorOnly,
+  DashboardHero,
   EmptyNotice,
   ErrorNotice,
   LoadingNotice,
   Page,
-  PageTitle,
   routeHref,
+  SummaryCard,
 } from '@/components/programme-ui';
 import { useAuth } from '@/providers/auth-provider';
 import { apiErrorText } from '@/services/api';
@@ -67,9 +68,42 @@ function AssessorDashboard() {
 
   return (
     <Page>
-      <PageTitle title="Assessment workspace" subtitle={`Evidence review queue for ${user?.fullName ?? 'assessor'}.`} />
+      <DashboardHero
+        eyebrow="ASSESSMENT"
+        title={`Welcome, ${user?.fullName ?? 'assessor'}`}
+        subtitle="Review evidence and follow decisions across your assigned programmes."
+        symbol={{ ios: 'checkmark.seal.fill', android: 'verified', web: 'verified' }}
+      />
       {loading ? <LoadingNotice label="Loading assigned programmes..." /> : null}
       {!loading && error ? <ErrorNotice message={error} onRetry={() => void load()} /> : null}
+      {!loading && !error && programmes.length > 0 ? (
+        <View className="gap-3">
+          <Text className="text-base font-extrabold text-ink">Review overview</Text>
+          <View className="flex-row flex-wrap gap-3">
+            <SummaryCard
+              label="Pending reviews"
+              value={totals.pending}
+              detail="Evidence awaiting your decision"
+              symbol={{ ios: 'tray.full.fill', android: 'inbox', web: 'inbox' }}
+              tone="amber"
+            />
+            <SummaryCard
+              label="Approved"
+              value={totals.approved}
+              detail="Recorded assessment outcomes"
+              symbol={{ ios: 'checkmark.circle.fill', android: 'task_alt', web: 'task_alt' }}
+              tone="sage"
+            />
+            <SummaryCard
+              label="Corrections requested"
+              value={totals.corrections}
+              detail="Returned for provider follow-up"
+              symbol={{ ios: 'arrow.uturn.backward.circle.fill', android: 'assignment_return', web: 'assignment_return' }}
+              tone={totals.corrections ? 'amber' : 'plain'}
+            />
+          </View>
+        </View>
+      ) : null}
       {!loading && !error && programmes.length > 0 ? (
         <View className="gap-3">
           <Text className="text-base font-bold text-ink">Evidence waiting for review</Text>
@@ -80,11 +114,13 @@ function AssessorDashboard() {
               key={submission.id}
               accessibilityRole="button"
               accessibilityLabel={`Review ${submission.requirement_title}, version ${submission.version}, for ${submission.learner_name}`}
-              className="gap-2 rounded-[20px] border border-border bg-white p-4 shadow-sm shadow-black/5"
+              className="gap-3 rounded-2xl border border-l-4 border-border border-l-amber-400 bg-white p-5 shadow-sm shadow-primary/5 active:opacity-90"
               onPress={() => router.push(routeHref(`/assessor/submissions/${submission.id}`))}>
               <View className="flex-row items-start justify-between gap-3">
                 <Text className="flex-1 text-base font-bold text-ink">{submission.learner_name}</Text>
-                <Text className="text-xs font-extrabold text-primary">NEEDS REVIEW</Text>
+                <View className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1">
+                  <Text className="text-[10px] font-extrabold text-amber-900">Needs review</Text>
+                </View>
               </View>
               <Text className="text-sm text-muted">{submission.programme_name} · {submission.requirement_title}</Text>
               <Text className="text-xs text-muted">
@@ -95,48 +131,43 @@ function AssessorDashboard() {
           ))}
         </View>
       ) : null}
-      {!loading && !error && programmes.length > 0 ? (
-        <View className="gap-3">
-          <Text className="text-base font-bold text-ink">Review overview</Text>
-          <View className="flex-row flex-wrap gap-3">
-            <MetricCard label="Pending reviews" count={totals.pending} />
-            <MetricCard label="Approved" count={totals.approved} />
-            <MetricCard label="Corrections requested" count={totals.corrections} />
-          </View>
-        </View>
-      ) : null}
       {!loading && !error && programmes.length === 0 ? (
         <EmptyNotice title="No programmes assigned" message="An administrator must assign you to a programme before its evidence is available." />
       ) : null}
-      <View className="gap-3">
-        {[...programmes].sort((a, b) => b.pending_reviews - a.pending_reviews).map((programme) => (
-          <Pressable
-            key={programme.id}
-            accessibilityRole="button"
-            className="gap-4 rounded-[24px] border border-border bg-white p-4 shadow-sm shadow-black/5"
-            onPress={() => router.push(routeHref(`/assessor/programmes/${programme.id}`))}>
-            <View className="flex-row items-start justify-between gap-4">
-              <Text className="flex-1 text-lg font-bold text-ink">{programme.name}</Text>
-              <Text className="text-[10px] font-extrabold tracking-[0.16em] text-primary">{programme.pending_reviews} PENDING</Text>
-            </View>
-            <View className="flex-row flex-wrap gap-3">
-              <MetricCard label="Learners" count={programme.learner_count} />
-              <MetricCard label="Approved" count={programme.approved_count} />
-              <MetricCard label="Corrections" count={programme.correction_count} />
-            </View>
-            <Text className="text-sm font-bold text-primary">Open programme reviews ›</Text>
-          </Pressable>
-        ))}
-      </View>
+      {!loading && !error && programmes.length > 0 ? (
+        <View className="gap-3">
+          <Text className="text-base font-extrabold text-ink">Assigned programmes</Text>
+          {[...programmes].sort((a, b) => b.pending_reviews - a.pending_reviews).map((programme) => (
+            <Pressable
+              key={programme.id}
+              accessibilityRole="button"
+              className="gap-4 rounded-2xl border border-l-4 border-border border-l-primary bg-white p-5 shadow-sm shadow-primary/5 active:opacity-90"
+              onPress={() => router.push(routeHref(`/assessor/programmes/${programme.id}`))}>
+              <View className="flex-row items-start justify-between gap-4">
+                <Text className="flex-1 text-lg font-bold text-ink">{programme.name}</Text>
+                <Text className="rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-extrabold text-amber-900">
+                  {programme.pending_reviews} pending
+                </Text>
+              </View>
+              <View className="flex-row flex-wrap gap-4 rounded-xl bg-[#F0F7F1] px-4 py-3">
+                <InlineMetric label="Learners" value={programme.learner_count} />
+                <InlineMetric label="Approved" value={programme.approved_count} />
+                <InlineMetric label="Corrections" value={programme.correction_count} warning={programme.correction_count > 0} />
+              </View>
+              <Text className="text-sm font-bold text-primary">Open programme reviews ›</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
     </Page>
   );
 }
 
-function MetricCard({ label, count }: { label: string; count: number }) {
+function InlineMetric({ label, value, warning = false }: { label: string; value: number; warning?: boolean }) {
   return (
-    <View className="min-w-[120px] flex-1 rounded-2xl border border-border bg-white px-4 py-3">
-      <Text className="text-2xl font-extrabold text-ink">{count}</Text>
-      <Text className="text-xs text-muted">{label}</Text>
+    <View className="min-w-[72px] flex-1 gap-1">
+      <Text className={`text-lg font-extrabold ${warning ? 'text-amber-900' : 'text-ink'}`}>{value}</Text>
+      <Text className="text-[10px] font-bold text-muted">{label}</Text>
     </View>
   );
 }

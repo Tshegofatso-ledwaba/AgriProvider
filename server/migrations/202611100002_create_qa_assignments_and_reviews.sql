@@ -2,10 +2,6 @@ ALTER TABLE evidence_reviews
   ADD CONSTRAINT evidence_reviews_qa_link_unique
   UNIQUE (id, evidence_submission_id, submission_version, programme_id);
 
-ALTER TABLE evidence_reviews
-  ADD CONSTRAINT evidence_reviews_qa_link_unique
-  UNIQUE (id, evidence_submission_id, submission_version, programme_id);
-
 CREATE TABLE qa_programme_assignments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   programme_id UUID NOT NULL REFERENCES programmes(id) ON DELETE RESTRICT,

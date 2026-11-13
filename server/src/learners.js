@@ -1,11 +1,11 @@
-const { randomUUID } = require('node:crypto');
+const { createHash, randomBytes, randomUUID } = require('node:crypto');
 const { Router } = require('express');
 const { authenticate, requireRole } = require('./middleware/authenticate');
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const allowedFields = new Set(['fullName', 'phone', 'email', 'confirmPossibleDuplicate']);
-const learnerColumns = 'id, learner_reference, full_name, phone, email, created_at, updated_at, archived_at';
-const learnerListColumns = 'id, learner_reference, full_name, created_at, updated_at, archived_at';
+const learnerColumns = 'id, learner_reference, full_name, phone, email, learner_user_id, created_at, updated_at, archived_at';
+const learnerListColumns = 'id, learner_reference, full_name, learner_user_id, created_at, updated_at, archived_at';
 const validEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) && value.length <= 254;
 
 function isObject(value) {
@@ -60,13 +60,22 @@ function validateLearnerBody(body, { partial = false } = {}) {
   return { value, confirmPossibleDuplicate: body.confirmPossibleDuplicate === true };
 }
 
-function mapLearner(row, { includeContact = true } = {}) {
+function mapLearner(row, { includeContact = true, linkedAccount = null } = {}) {
   return {
     id: row.id,
     learner_reference: row.learner_reference,
     full_name: row.full_name,
     phone: includeContact ? row.phone : null,
     email: includeContact ? row.email : null,
+    learner_user_id: row.learner_user_id ?? null,
+    account_status: row.learner_user_id ? 'active' : 'pending',
+    linked_account: linkedAccount ? {
+      id: linkedAccount.id,
+      email: linkedAccount.email,
+      full_name: linkedAccount.full_name,
+      role: linkedAccount.role,
+      is_active: linkedAccount.is_active,
+    } : null,
     created_at: row.created_at,
     updated_at: row.updated_at,
     status: row.archived_at ? 'archived' : 'active',
@@ -97,6 +106,103 @@ function duplicateResponse(response) {
     error: 'A learner with matching name or contact details may already exist. Review the existing list before continuing.',
     code: 'POSSIBLE_DUPLICATE',
   });
+}
+
+async function activateLearnerAccount(database, providerUserId, learnerId) {
+  const { rows: learnerRows } = await database.query(
+    `SELECT id, provider_user_id, full_name, email, learner_user_id
+     FROM learners
+    WHERE id = $1 AND provider_user_id = $2 AND archived_at IS NULL
+    FOR UPDATE`,
+    [learnerId, providerUserId],
+  );
+  const learner = learnerRows[0];
+  if (!learner) {
+    const error = new Error('Learner not found.');
+    error.status = 404;
+    throw error;
+  }
+  if (!learner.email || !validEmail(learner.email)) {
+    const error = new Error('A valid learner email is required before creating a learner sign-in account.');
+    error.status = 400;
+    throw error;
+  }
+  if (learner.learner_user_id) {
+    const { rows: userRows } = await database.query(
+      `SELECT id, email, full_name, role, is_active
+       FROM users
+       WHERE id = $1 AND is_active = TRUE`,
+      [learner.learner_user_id],
+    );
+    if (!userRows[0]) {
+      const error = new Error('The learner account link is invalid. Activate the learner again to repair it.');
+      error.status = 409;
+      throw error;
+    }
+    return { learnerRecord: learner, linkedAccount: userRows[0] };
+  }
+
+  const normalizedEmail = learner.email.trim().toLowerCase();
+  const { rows: userRows } = await database.query(
+    `SELECT id, email, full_name, role, is_active
+     FROM users
+     WHERE lower(email) = lower($1) AND is_active = TRUE`,
+    [normalizedEmail],
+  );
+
+  if (userRows[0]) {
+    const existingUser = userRows[0];
+    if (existingUser.role !== 'learner') {
+      const error = new Error('This email already belongs to a non-learner account and cannot be linked here.');
+      error.status = 409;
+      throw error;
+    }
+
+    const { rows: linkedRows } = await database.query(
+      `SELECT id
+       FROM learners
+       WHERE learner_user_id = $1 AND id <> $2 AND archived_at IS NULL
+       LIMIT 1`,
+      [existingUser.id, learnerId],
+    );
+    if (linkedRows[0]) {
+      const error = new Error('This learner account is already linked to another learner profile.');
+      error.status = 409;
+      throw error;
+    }
+
+    const { rows: updatedRows } = await database.query(
+      `UPDATE learners
+       SET learner_user_id = $1, updated_at = NOW()
+       WHERE id = $2 AND provider_user_id = $3
+       RETURNING ${learnerColumns}`,
+      [existingUser.id, learnerId, providerUserId],
+    );
+    return { learnerRecord: updatedRows[0], linkedAccount: existingUser };
+  }
+
+  const invitationToken = randomBytes(32).toString('hex');
+  const tokenHash = createHash('sha256').update(invitationToken).digest('hex');
+  await database.query(
+    `UPDATE learner_account_invitations
+     SET revoked_at = NOW()
+     WHERE learner_id = $1 AND consumed_at IS NULL AND revoked_at IS NULL`,
+    [learnerId],
+  );
+  const { rows: invitationRows } = await database.query(
+    `INSERT INTO learner_account_invitations (
+       id, learner_id, provider_user_id, token_hash, expires_at
+     )
+     VALUES ($1, $2, $3, $4, NOW() + INTERVAL '24 hours')
+     RETURNING expires_at`,
+    [randomUUID(), learnerId, providerUserId, tokenHash],
+  );
+  return {
+    learnerRecord: learner,
+    linkedAccount: null,
+    invitationToken,
+    invitationExpiresAt: invitationRows[0].expires_at,
+  };
 }
 
 function createLearnersRouter({ database, jwtSecret }) {
@@ -195,6 +301,46 @@ function createLearnersRouter({ database, jwtSecret }) {
     }
   });
 
+  router.post('/:id/activate-account', async (request, response, next) => {
+    if (!uuidPattern.test(request.params.id)) {
+      return response.status(400).json({ error: 'Learner ID must be a UUID.' });
+    }
+
+    try {
+      const client = await database.connect();
+      let transactionOpen = false;
+      try {
+        await client.query('BEGIN');
+        transactionOpen = true;
+        const { learnerRecord, linkedAccount, invitationToken, invitationExpiresAt } = await activateLearnerAccount(
+          client,
+          request.auth.userId,
+          request.params.id,
+        );
+        await client.query('COMMIT');
+        transactionOpen = false;
+        const payload = {
+          learner: mapLearner(learnerRecord, { linkedAccount }),
+        };
+        if (invitationToken) {
+          payload.invitationToken = invitationToken;
+          payload.invitationExpiresAt = invitationExpiresAt;
+        }
+        return response.json(payload);
+      } catch (error) {
+        if (transactionOpen) await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      if (error.status) {
+        return response.status(error.status).json({ error: error.message });
+      }
+      return next(error);
+    }
+  });
+
   router.get('/:id', async (request, response, next) => {
     if (!uuidPattern.test(request.params.id)) {
       return response.status(400).json({ error: 'Learner ID must be a UUID.' });
@@ -210,7 +356,15 @@ function createLearnersRouter({ database, jwtSecret }) {
       if (!rows[0]) {
         return response.status(404).json({ error: 'Learner not found.' });
       }
-      return response.json({ learner: mapLearner(rows[0]) });
+      const linkedAccount = rows[0].learner_user_id
+        ? await database.query(
+          `SELECT id, email, full_name, role, is_active
+           FROM users
+           WHERE id = $1 AND is_active = TRUE`,
+          [rows[0].learner_user_id],
+        )
+        : { rows: [] };
+      return response.json({ learner: mapLearner(rows[0], { linkedAccount: linkedAccount.rows[0] ?? null }) });
     } catch (error) {
       return next(error);
     }

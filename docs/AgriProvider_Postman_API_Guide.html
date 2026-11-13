@@ -47,7 +47,7 @@
       <div class="eyebrow">Postman collection guide</div>
       <h1>API Requests<br>in Postman</h1>
       <p class="subtitle">Setup instructions and endpoint reference for the AgriProvider Postman collection.</p>
-      <p class="muted">Version 1 · 10 November 2026 · API base URL: <code>http://localhost:5000</code></p>
+      <p class="muted">Version 1 · 12 November 2026 · API base URL: <code>http://localhost:5000</code></p>
       <div class="band">
         <strong>Import these files</strong>
         <p><code>AgriProvider_API.postman_collection.json</code><br><code>AgriProvider_Local.postman_environment.json</code></p>
@@ -86,11 +86,21 @@
       <tr><td>POST</td><td><code>/api/auth/login</code></td><td>Public sign-in; optional accountType validates but never changes stored role.</td></tr>
       <tr><td>GET</td><td><code>/api/auth/me</code></td><td>Authenticated current-user profile.</td></tr>
       <tr><td>POST</td><td><code>/api/auth/logout</code></td><td>Clears web cookie; bearer clients discard token locally.</td></tr>
+      <tr><td>GET</td><td><code>/api/notifications</code></td><td>Authenticated: list only the caller's notifications; supports unreadOnly/category/limit/offset filters.</td></tr>
+      <tr><td>PATCH</td><td><code>/api/notifications/:id/read</code></td><td>Authenticated recipient only: mark a notification read; other recipients receive 404.</td></tr>
     </tbody></table>
+    <h3>QA Officer review</h3>
+    <table><thead><tr><th class="method">Method</th><th class="route">Path</th><th>Role and behavior</th></tr></thead><tbody>
+      <tr><td>GET</td><td><code>/api/qa/dashboard</code></td><td>QA Officer: assigned programmes, assessment queue, persisted outcome counts.</td></tr>
+      <tr><td>GET</td><td><code>/api/qa/submissions/:submissionId</code></td><td>QA Officer: assigned evidence, assessor decision, QA outcome, and history.</td></tr>
+      <tr><td>POST</td><td><code>/api/qa/submissions/:submissionId/reviews</code></td><td>QA Officer: immutable VERIFIED, FURTHER_ACTION_REQUIRED, or NOT_VERIFIED outcome for the exact assessor review/version.</td></tr>
+    </tbody></table>
+    <p class="small muted">QA findings and corrective-action response/verification/closure are not implemented. Email/SMS/push notification delivery is not configured.</p>
     <h3>Provider programmes, learners, enrolments</h3>
     <table><thead><tr><th class="method">Method</th><th class="route">Path</th><th>Role and behavior</th></tr></thead><tbody>
       <tr><td>GET / POST</td><td><code>/api/programmes</code></td><td>Provider: list active programmes / create with name and optional description.</td></tr>
       <tr><td>GET / PATCH / DELETE</td><td><code>/api/programmes/:id</code></td><td>Provider: retrieve, update, or archive an owned programme.</td></tr>
+      <tr><td>GET</td><td><code>/api/programmes/:id/progress</code></td><td>Provider: factual enrolment, session, attendance, and latest evidence-status counts; not an official completion score.</td></tr>
       <tr><td>GET</td><td><code>/api/learners</code></td><td>Provider: search/paginate; query supports q, status, limit, offset.</td></tr>
       <tr><td>POST</td><td><code>/api/learners</code></td><td>Provider: create profile; possible duplicate returns 409 and confirmation code.</td></tr>
       <tr><td>GET / PATCH / DELETE</td><td><code>/api/learners/:id</code></td><td>Provider: retrieve, update, or archive an owned learner; archive withdraws active enrolments.</td></tr>
@@ -160,7 +170,7 @@
       <li>409: check duplicate, workflow state, or resubmission requirements.</li>
       <li>503: check API/database connectivity and configured storage.</li>
     </ul>
-    <div class="note danger"><strong>Not available through this API:</strong> learner uploads, notifications/announcements, QA decisions, official certification, eligibility calculations, payment execution, and external AgriSETA/government integration.</div>
+    <div class="note danger"><strong>Not available through this API:</strong> learner uploads, announcements, QA findings/corrective actions, official certification, eligibility calculations, payment execution, and external AgriSETA/government integration.</div>
     <p class="small muted">For full field constraints, authentication cookie configuration, response details, and setup cautions, see <code>AgriProvider_API_Documentation.pdf</code> and <code>server/README.md</code>. API tests use an in-memory SQL stub; do not treat them as production database verification.</p>
   </section>
 </body>

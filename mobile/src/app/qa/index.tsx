@@ -4,12 +4,13 @@ import { Pressable, Text, TextInput, View } from 'react-native';
 
 import {
   EmptyNotice,
+  DashboardHero,
   ErrorNotice,
   LoadingNotice,
   Page,
-  PageTitle,
   QaOnly,
   routeHref,
+  SummaryCard,
 } from '@/components/programme-ui';
 import { useAuth } from '@/providers/auth-provider';
 import { apiErrorText } from '@/services/api';
@@ -69,7 +70,22 @@ function QADashboard() {
 
   return (
     <Page onRefresh={() => void load()} refreshing={loading}>
-      <PageTitle title="Quality assurance" subtitle="Review assessment records within your assigned programmes." />
+      <DashboardHero
+        eyebrow="QUALITY ASSURANCE"
+        title="Review and verify"
+        subtitle="Check assessor decisions within your assigned programme scope."
+        symbol={{ ios: 'checkmark.shield.fill', android: 'verified_user', web: 'verified_user' }}
+      />
+      <Link href={routeHref('/qa/findings')} asChild>
+        <Pressable accessibilityRole="button" className="min-h-11 items-center justify-center self-start rounded-xl border border-border bg-white px-4 py-3 active:opacity-80">
+          <Text className="text-sm font-bold text-ink">Findings and corrective actions</Text>
+        </Pressable>
+      </Link>
+      <Link href={routeHref('/qa/eligibility')} asChild>
+        <Pressable accessibilityRole="button" className="min-h-11 items-center justify-center self-start rounded-xl border border-border bg-white px-4 py-3 active:opacity-80">
+          <Text className="text-sm font-bold text-ink">Certificate eligibility reviews</Text>
+        </Pressable>
+      </Link>
       {dashboard?.scopeConfigured ? (
         <View className="gap-2">
           <Text className="text-xs font-bold uppercase text-muted">Assigned programme scope</Text>
@@ -91,10 +107,34 @@ function QADashboard() {
       {!loading && error ? <ErrorNotice message={error} onRetry={() => void load()} /> : null}
       {!loading && !error && dashboard?.scopeConfigured ? (
         <View className="flex-row flex-wrap gap-3">
-          <Metric label="Awaiting review" value={dashboard.summary.awaiting_review} tone="amber" />
-          <Metric label="Verified" value={dashboard.summary.verified} tone="green" />
-          <Metric label="Further action" value={dashboard.summary.further_action_required} tone="amber" />
-          <Metric label="Not verified" value={dashboard.summary.not_verified} tone="neutral" />
+          <SummaryCard
+            label="Awaiting review"
+            value={dashboard.summary.awaiting_review}
+            detail="Assessment records to check"
+            symbol={{ ios: 'tray.full.fill', android: 'inbox', web: 'inbox' }}
+            tone="amber"
+          />
+          <SummaryCard
+            label="Verified"
+            value={dashboard.summary.verified}
+            detail="QA decisions recorded"
+            symbol={{ ios: 'checkmark.seal.fill', android: 'verified', web: 'verified' }}
+            tone="forest"
+          />
+          <SummaryCard
+            label="Further action"
+            value={dashboard.summary.further_action_required}
+            detail="Needs another workflow step"
+            symbol={{ ios: 'arrow.trianglehead.2.clockwise.rotate.90', android: 'sync_problem', web: 'sync_problem' }}
+            tone={dashboard.summary.further_action_required ? 'amber' : 'sage'}
+          />
+          <SummaryCard
+            label="Not verified"
+            value={dashboard.summary.not_verified}
+            detail="Recorded QA outcomes"
+            symbol={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
+            tone="plain"
+          />
         </View>
       ) : null}
 
@@ -115,7 +155,7 @@ function QADashboard() {
               onChangeText={setSearch}
               onSubmitEditing={() => setSubmittedSearch(search.trim())}
               placeholder="Search learner, programme, or evidence"
-              placeholderTextColor="#68736E"
+              placeholderTextColor="#5C6D67"
               returnKeyType="search"
             />
             <Pressable
@@ -190,16 +230,6 @@ function ScopeFilter({ label, selected, onPress }: { label: string; selected: bo
       onPress={onPress}>
       <Text className={`text-xs font-bold ${selected ? 'text-primary' : 'text-muted'}`}>{label}</Text>
     </Pressable>
-  );
-}
-
-function Metric({ label, value, tone }: { label: string; value: number; tone: 'green' | 'amber' | 'neutral' }) {
-  const color = tone === 'green' ? 'text-emerald-800' : tone === 'amber' ? 'text-amber-900' : 'text-ink';
-  return (
-    <View className="min-w-[140px] flex-1 gap-1 rounded-2xl border border-border bg-white p-4 shadow-sm shadow-black/5">
-      <Text className={`text-3xl font-extrabold ${color}`}>{value}</Text>
-      <Text className="text-xs font-bold text-muted">{label}</Text>
-    </View>
   );
 }
 

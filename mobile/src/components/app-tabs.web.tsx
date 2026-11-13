@@ -16,7 +16,7 @@ export default function AppTabs() {
       <TabList asChild>
         <View className={`${
           user
-            ? 'absolute bottom-4 left-4 right-4 mx-auto max-w-xl rounded-2xl border border-border bg-element p-2 dark:border-dark-border dark:bg-dark-element'
+            ? 'fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-xl rounded-2xl border border-border bg-element p-2 shadow-lg shadow-primary/10 dark:border-dark-border dark:bg-dark-element'
             : 'hidden'
         }`}>
           {user?.role !== 'learner' ? (
@@ -115,6 +115,14 @@ export default function AppTabs() {
           ) : null}
           {user?.role === 'learner' ? (
             <TabTrigger
+              name="learner/calendar"
+              href={routeHref('/learner/calendar')}
+              className="min-w-0 flex-1 rounded-xl px-1 py-3 text-center active:opacity-70">
+              <LearnerTab label="Timetable" selected={pathname === '/learner/calendar'} symbol={{ ios: 'calendar.day.timeline.left', android: 'calendar_month', web: 'calendar_month' }} />
+            </TabTrigger>
+          ) : null}
+          {user?.role === 'learner' ? (
+            <TabTrigger
               name="learner/evidence"
               href={routeHref('/learner/evidence')}
               className="min-w-0 flex-1 rounded-xl px-1 py-3 text-center active:opacity-70">
@@ -144,7 +152,7 @@ function LearnerTab({
   selected: boolean;
   symbol: SymbolViewProps['name'];
 }) {
-  const color = selected ? '#21764A' : '#68736E';
+  const color = selected ? '#173F35' : '#5C6D67';
   return (
     <View className="items-center gap-1 px-1 py-1">
       <SymbolView name={symbol} size={16} tintColor={color} />

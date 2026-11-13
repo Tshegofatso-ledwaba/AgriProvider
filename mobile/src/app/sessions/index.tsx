@@ -75,18 +75,28 @@ function SessionList() {
           }
         />
       ) : null}
-      {!loading && !error && sessions.map((session) => (
-        <Link key={session.id} href={routeHref(`/sessions/${session.id}`)} asChild>
-          <Pressable accessibilityRole="button" className="gap-2 rounded-2xl border border-border bg-white p-5 active:opacity-80">
-            <Text className="text-lg font-bold text-ink">{session.title}</Text>
-            <Text className="text-sm font-semibold text-primary">{session.programme_name}</Text>
-            <Text className="text-sm text-muted">{new Date(session.starts_at).toLocaleString()}</Text>
-            <Text className="text-xs text-muted">
-              {session.marked_count} of {session.enrolled_count} enrolled learners marked
-            </Text>
-          </Pressable>
-        </Link>
-      ))}
+      {!loading && !error ? (
+        <View className="flex-row flex-wrap gap-3">
+          {sessions.map((session) => (
+            <Link key={session.id} href={routeHref(`/sessions/${session.id}`)} asChild>
+              <Pressable accessibilityRole="button" className="min-w-[260px] flex-1 gap-3 rounded-2xl border border-border bg-white p-5 shadow-sm shadow-primary/5 active:opacity-90">
+                <View className="flex-row items-start justify-between gap-3">
+                  <Text className="flex-1 text-lg font-extrabold text-ink">{session.title}</Text>
+                  <Text className="rounded-full bg-selected px-2.5 py-1 text-[10px] font-bold text-primary">Training</Text>
+                </View>
+                <Text className="text-sm font-semibold text-primary">{session.programme_name}</Text>
+                <Text className="text-sm text-muted">{new Date(session.starts_at).toLocaleString()}</Text>
+                <View className="border-t border-border pt-3">
+                  <Text className="text-xs font-bold text-ink">
+                    {session.marked_count} of {session.enrolled_count} enrolled learners marked
+                  </Text>
+                  <Text className="mt-2 text-xs font-bold text-primary">Record attendance ›</Text>
+                </View>
+              </Pressable>
+            </Link>
+          ))}
+        </View>
+      ) : null}
     </Page>
   );
 }

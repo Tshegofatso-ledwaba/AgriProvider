@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
+const fs = require('node:fs/promises');
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { after, before, test } = require('node:test');
@@ -455,4 +456,12 @@ test('QA review validation requires a supported outcome and non-empty comments',
     decision: 'APPROVED', comments: 'Invalid outcome.'
   });
   assert.equal(invalid.status, 400);
+});
+
+test('QA migration adds the evidence review link constraint only once', async () => {
+  const migration = await fs.readFile(
+    require.resolve('../migrations/202611100002_create_qa_assignments_and_reviews.sql'),
+    'utf8',
+  );
+  assert.equal((migration.match(/ADD CONSTRAINT evidence_reviews_qa_link_unique/g) || []).length, 1);
 });

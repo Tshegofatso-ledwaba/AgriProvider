@@ -81,19 +81,26 @@ function ProgrammeList() {
           }
         />
       ) : null}
-      {!loading && !error && programmes.map((programme) => (
-        <Link key={programme.id} href={routeHref(`/programmes/${programme.id}`)} asChild>
-          <Pressable
-            accessibilityRole="button"
-            className="gap-2 rounded-2xl border border-border bg-white p-5 active:opacity-80">
-            <Text className="text-lg font-bold text-ink">{programme.name}</Text>
-            <Text className="text-sm leading-5 text-muted" numberOfLines={3}>
-              {programme.description || 'No description added.'}
-            </Text>
-            <Text className="mt-1 text-xs font-bold text-primary">View details</Text>
-          </Pressable>
-        </Link>
-      ))}
+      {!loading && !error ? (
+        <View className="flex-row flex-wrap gap-3">
+          {programmes.map((programme) => (
+            <Link key={programme.id} href={routeHref(`/programmes/${programme.id}`)} asChild>
+              <Pressable
+                accessibilityRole="button"
+                className="min-w-[260px] flex-1 gap-3 rounded-2xl border border-l-4 border-border border-l-primary bg-white p-5 shadow-sm shadow-primary/5 active:opacity-90">
+                <View className="flex-row items-center justify-between gap-3">
+                  <Text className="flex-1 text-lg font-extrabold text-ink">{programme.name}</Text>
+                  <Text className="rounded-full bg-selected px-2.5 py-1 text-[10px] font-bold text-primary">Programme</Text>
+                </View>
+                <Text className="text-sm leading-5 text-muted" numberOfLines={3}>
+                  {programme.description || 'No description added.'}
+                </Text>
+                <Text className="text-xs font-bold text-primary">View details ›</Text>
+              </Pressable>
+            </Link>
+          ))}
+        </View>
+      ) : null}
     </Page>
   );
 }

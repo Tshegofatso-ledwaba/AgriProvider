@@ -136,21 +136,33 @@ function LearnerList() {
           ) : undefined}
         />
       ) : null}
-      {!loading && !error && learners.map((learner) => (
-        <Link key={learner.id} href={routeHref(`/learners/${learner.id}`)} asChild>
-          <Pressable accessibilityRole="button" className="gap-2 rounded-2xl border border-border bg-white p-5 active:opacity-80">
-            <View className="flex-row items-start justify-between gap-3">
-              <Text className="flex-1 text-lg font-bold text-ink">{learner.full_name}</Text>
-              <Text className={`rounded-full px-2 py-1 text-xs font-bold ${
-                learner.status === 'active' ? 'bg-selected text-primary' : 'bg-gray-100 text-muted'
-              }`}>
-                {learner.status}
-              </Text>
-            </View>
-            <Text className="text-sm text-muted">{learner.learner_reference}</Text>
-          </Pressable>
-        </Link>
-      ))}
+      {!loading && !error ? (
+        <View className="flex-row flex-wrap gap-3">
+          {learners.map((learner) => (
+            <Link key={learner.id} href={routeHref(`/learners/${learner.id}`)} asChild>
+              <Pressable accessibilityRole="button" className="min-w-[260px] flex-1 gap-3 rounded-2xl border border-border bg-white p-5 shadow-sm shadow-primary/5 active:opacity-90">
+                <View className="flex-row items-center gap-3">
+                  <View className="h-11 w-11 items-center justify-center rounded-xl bg-selected">
+                    <Text className="text-sm font-extrabold text-primary">
+                      {learner.full_name.trim().split(/\s+/).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join('') || 'L'}
+                    </Text>
+                  </View>
+                  <View className="min-w-0 flex-1 gap-1">
+                    <Text className="text-base font-extrabold text-ink" numberOfLines={1}>{learner.full_name}</Text>
+                    <Text className="text-xs text-muted">{learner.learner_reference}</Text>
+                  </View>
+                  <Text className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold ${
+                    learner.status === 'active' ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-700'
+                  }`}>
+                    {learner.status}
+                  </Text>
+                </View>
+                <Text className="text-xs font-bold text-primary">Open learner record ›</Text>
+              </Pressable>
+            </Link>
+          ))}
+        </View>
+      ) : null}
       {!loading && loadMoreError ? (
         <View className="gap-3">
           <Text className="text-sm text-danger" accessibilityRole="alert">{loadMoreError}</Text>

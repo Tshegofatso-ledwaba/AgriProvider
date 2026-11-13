@@ -7,6 +7,7 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "migrate": "node src/migrate.js",
+    "test:postgres": "node --test test/programme-progress.integration.test.js test/notifications.integration.test.js test/qa-findings.integration.test.js test/certificates.integration.test.js",
     "create-privileged-user": "node src/provision-user.js",
     "test": "node --test"
   },
@@ -21,6 +22,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.5.0",
     "nodemon": "^3.1.14",
+    "pdfkit": "^0.20.2",
     "pg": "^8.23.1"
   }
 }

@@ -77,15 +77,25 @@ function EnrolmentList() {
           }
         />
       ) : null}
-      {!loading && !error && enrolments.map((enrolment) => (
-        <Link key={enrolment.id} href={routeHref(`/enrolments/${enrolment.id}`)} asChild>
-          <Pressable accessibilityRole="button" className="gap-2 rounded-2xl border border-border bg-white p-5 active:opacity-80">
-            <Text className="text-lg font-bold text-ink">{enrolment.learner_name}</Text>
-            <Text className="text-sm text-muted">{enrolment.learner_reference}</Text>
-            <Text className="text-sm font-semibold text-primary">{enrolment.programme_name}</Text>
-          </Pressable>
-        </Link>
-      ))}
+      {!loading && !error ? (
+        <View className="flex-row flex-wrap gap-3">
+          {enrolments.map((enrolment) => (
+            <Link key={enrolment.id} href={routeHref(`/enrolments/${enrolment.id}`)} asChild>
+              <Pressable accessibilityRole="button" className="min-w-[260px] flex-1 gap-3 rounded-2xl border border-l-4 border-border border-l-emerald-600 bg-white p-5 shadow-sm shadow-primary/5 active:opacity-90">
+                <View className="gap-1">
+                  <Text className="text-[10px] font-extrabold text-muted">ACTIVE ENROLMENT</Text>
+                  <Text className="text-lg font-extrabold text-ink">{enrolment.learner_name}</Text>
+                  <Text className="text-xs text-muted">{enrolment.learner_reference}</Text>
+                </View>
+                <View className="border-t border-border pt-3">
+                  <Text className="text-sm font-semibold text-primary">{enrolment.programme_name}</Text>
+                  <Text className="mt-2 text-xs font-bold text-primary">View enrolment ›</Text>
+                </View>
+              </Pressable>
+            </Link>
+          ))}
+        </View>
+      ) : null}
     </Page>
   );
 }

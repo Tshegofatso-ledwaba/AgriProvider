@@ -15,20 +15,22 @@ The backend uses Express and PostgreSQL on Neon. Its environment configuration b
 
 - `POST /api/auth/register` creates a provider account. A submitted role is ignored; public registration cannot grant assessor, QA, or administrator access.
 - `POST /api/auth/login` returns a signed one-hour JWT for native clients. It accepts an optional `accountType` (`provider`, `assessor`, `qa`, or `admin`) to verify the selected sign-in type against the account's existing role; it never changes roles. Web requests use `X-Auth-Mode: cookie` from the configured `WEB_ORIGIN`; they receive an HttpOnly, SameSite=Strict cookie instead of a token in the response.
+- `POST /api/auth/learner-activation` accepts a provider-issued one-time setup token and a learner password. Tokens expire after 24 hours, are stored only as hashes, and are consumed atomically with learner account creation and profile linking. This endpoint is rate limited; public registration remains provider-only.
 - Transient database connection failures return HTTP 503 with a retry-safe message; the API does not retry database writes automatically.
 - `POST /api/auth/logout` clears the web session cookie.
 - `GET /api/auth/me` returns the authenticated user's profile and requires either `Authorization: Bearer <token>` or the web session cookie.
+- `GET /api/notifications?unreadOnly=true|false&category=<category>&limit=<n>&offset=<n>` lists only the authenticated user's notifications and unread count. `PATCH /api/notifications/:id/read` marks only the caller's notification read; other recipients receive 404.
 - Authentication endpoints are rate limited. Passwords must be between 12 and 72 UTF-8 bytes and are stored as bcrypt hashes.
 - The web cookie is Secure in production, scoped to `/api`, and is sent only with credentialed CORS requests from the exact configured `WEB_ORIGIN`. Configure the web app and API on the same site; production must use HTTPS.
 - Create administrator, assessor, or QA accounts only from a trusted server terminal with `npm run create-privileged-user -- <admin|assessor|qa> user@example.com "Full Name"`. The password is entered without terminal echo. Do not expose this command through an API or mobile screen.
 
-Run backend tests with `npm test`.
+Run backend tests with `npm test`. Run the PostgreSQL integration tests (programme progress, QA notifications, and the QA findings workflow over real HTTP routes) with `npm run test:postgres` after setting `AGRI_TEST_DATABASE_URL` to a disposable development/test database. Synthetic rows are inserted inside transactions and rolled back.
 
 The backend includes provider authentication and provider-scoped programme, learner, enrolment, training-session, attendance, evidence-checklist, and evidence-submission APIs, plus administrator-managed assessor assignment and assigned-assessor review APIs. Learner profiles use only the approved minimal fields: full name, generated internal reference, optional phone/email, and system-managed timestamps. Duplicate name/contact matches trigger a 409 warning which the provider can explicitly confirm. Archiving a learner withdraws their active enrolments while preserving history.
 
 ### Learner workspace
 
-The authenticated `GET /api/learner/dashboard` endpoint is restricted to learner accounts. It resolves a learner profile using its explicit `learner_user_id` link, with a legacy email match only when that profile has no user link. Ambiguous profile matches return `409`; a learner cannot select another learner's ID. The response includes that learner's enrolments, provider names, recorded attendance, configured evidence requirements, all submission versions, and feedback linked to each version. The endpoint is read-only. The `migrations/202611090001_add_learner_user_link.sql` migration adds the profile link used by the endpoint and must be applied to a development database before deploying this dashboard; it has not been verified against PostgreSQL. Do not apply it to production without confirming and approving the target. Learner evidence uploads, notifications, announcements, QA verification, and official programme-completion state are not implemented.
+The authenticated `GET /api/learner/dashboard` endpoint is restricted to learner accounts. It resolves a learner profile using its explicit `learner_user_id` link, with a legacy email match only when that profile has no user link. Ambiguous profile matches return `409`; a learner cannot select another learner's ID. The response includes that learner's enrolments, provider names, recorded attendance, configured evidence requirements, all submission versions, and feedback linked to each version. The endpoint is read-only. Provider-issued learner setup codes are single-use, hashed at rest, and expire after 24 hours; no email/SMS delivery is configured. Learners can read their own notification records; private QA comments and findings are not exposed. Learner evidence uploads, announcements, and official programme-completion state are not implemented.
 
 ## Provider programmes
 
@@ -37,6 +39,7 @@ Provider accounts manage their own programmes through these authenticated endpoi
 - `GET /api/programmes` lists active programmes owned by the signed-in provider.
 - `POST /api/programmes` creates a programme with a required `name` and optional `description`.
 - `GET /api/programmes/:id` retrieves an owned programme.
+- `GET /api/programmes/:id/progress` returns active/withdrawn enrolments, active sessions, recorded attendance by status, and latest evidence status counts across active enrolments and configured requirements. It reports counts only and does not determine official programme completion.
 - `PATCH /api/programmes/:id` updates `name` and/or `description`.
 - `DELETE /api/programmes/:id` archives an owned programme; archived programmes are excluded from normal reads.
 
@@ -67,6 +70,8 @@ The migration `migrations/202610300002_create_learners.sql` creates provider-own
 - `DELETE /api/learners/:id` — archive the record and withdraw its active enrolments.
 
 The API generates the internal reference. Possible name/contact matches return a `409` with code `POSSIBLE_DUPLICATE`; the provider can explicitly confirm the new record with `confirmPossibleDuplicate: true`. This is a warning, not a hard duplicate identity rule. No national identity/document number is collected.
+
+Providers can create a setup code for a learner with `POST /api/learners/:id/activate-account`. The response contains the code once; issuing a replacement revokes any prior unused code. Share it with the learner through an approved secure channel. The application does not send email or SMS invitations. The migration `202611110001_create_learner_account_invitations.sql` must be applied before using this flow.
 
 ### Enrolments
 
@@ -147,4 +152,43 @@ Assessor endpoints (JWT role `assessor`; programme access requires an active ass
 
 Provider submission history now includes assessor decisions and feedback. Providers can upload a revised version only after `CORRECTION_REQUIRED`; the new version starts as `SUBMITTED` and receives its own review. Public registration remains provider-only. Create administrator accounts with the trusted CLI described above.
 
-QA verification, certification, eligibility, payment processing, notifications, and a complete audit system remain out of scope; see [the project roadmap](../docs/ROADMAP.md). The Phase 8 migration is verified on the disposable test database, not production.
+QA assignments, assessment review, immutable QA outcomes, and generated in-app notifications are implemented.
+
+### QA findings and corrective actions
+
+Migrations `202611120002_create_qa_findings_and_corrective_actions.sql` and `202611130001_extend_qa_findings_workflow.sql` add findings linked to an exact QA review, administrator-configured categories/severities, optional due dates, an immutable event history, database-generated notifications, row-level audit events, and delete protection.
+
+Workflow (enforced on the server; any other transition returns `409`):
+
+| Action | Role | From | To |
+|---|---|---|---|
+| Record finding | QA Officer who recorded the QA review, with an active assignment | — | `OPEN` |
+| Respond | Programme's provider | `OPEN` | `RESPONSE_SUBMITTED` |
+| Return for further action (reopen) | Any QA Officer actively assigned to the programme | `RESPONSE_SUBMITTED` | `OPEN` |
+| Verify | Any QA Officer actively assigned to the programme | `RESPONSE_SUBMITTED` | `VERIFIED` |
+| Close | Any QA Officer actively assigned to the programme | `VERIFIED` | `CLOSED` |
+
+A returned response is cleared from the finding row but kept in the event history. "Overdue" is derived (`due_date` before the database's current date while `OPEN` or `RESPONSE_SUBMITTED`) and is never stored. No categories or severities are seeded; administrators enter the organisation's approved values. Learners receive only a generic "QA status updated" notification on closure; finding text and QA review comments are never exposed to learners, and providers never see the internal QA review comments.
+
+QA Officer endpoints (JWT role `qa`):
+
+- `GET /api/qa/findings?status=all|OPEN|RESPONSE_SUBMITTED|VERIFIED|CLOSED|OVERDUE&programmeId=&limit=&offset=` returns findings in the officer's active programme scope with status counts.
+- `GET /api/qa/findings/options` lists active categories and severities.
+- `POST /api/qa/findings` accepts `qaReviewId`, `finding`, `correctiveAction`, and optional `categoryId`, `severityId`, `dueDate` (`YYYY-MM-DD`, not in the past). An identical unresolved finding on the same review returns `409`.
+- `GET /api/qa/findings/:findingId` returns the finding and its history.
+- `POST /api/qa/findings/:findingId/verify|return|close` accepts `{"comments":"..."}` (required).
+
+Provider endpoints (JWT role `provider`, own programmes only):
+
+- `GET /api/provider/qa-findings` (same filters) and `GET /api/provider/qa-findings/:findingId`.
+- `POST /api/provider/qa-findings/:findingId/response` accepts `{"response":"..."}` (required).
+
+Administrator endpoints (JWT role `admin`):
+
+- `GET /api/admin/qa-finding-options` lists all options with usage counts.
+- `POST /api/admin/qa-finding-options` accepts `{"kind":"CATEGORY"|"SEVERITY","label":"..."}`; duplicate labels (case-insensitive) return `409`.
+- `PATCH /api/admin/qa-finding-options/:optionId` accepts `label` and/or `isActive`. Options are deactivated, not deleted, so existing findings keep their label.
+
+Not yet implemented in this module: file attachments on corrective-action responses, scheduled overdue reminders, and assignment of a responsible user other than the programme's provider account.
+
+Certification, eligibility, payment processing, notification preferences/delivery channels, and a complete audit review interface are not implemented; see [the project roadmap](../docs/ROADMAP.md). Production Neon was not accessed or changed.

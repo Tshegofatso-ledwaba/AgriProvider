@@ -7,8 +7,8 @@ module.exports = {
     extend: {
       colors: {
         primary: '#173F35',
-        surface: '#F4F1ED',
-        border: '#E1E4E1',
+        surface: '#EFF3EF',
+        border: '#CCD8D0',
         ink: '#13271F',
         muted: '#5C6D67',
         danger: '#A83131',
@@ -21,6 +21,9 @@ module.exports = {
         'dark-muted': '#A6B3A8',
         'dark-primary': '#245C38',
         'dark-border': '#344238',
+      },
+      boxShadow: {
+        sm: '0 4px 14px rgb(23 63 53 / 0.08)',
       },
     },
   },

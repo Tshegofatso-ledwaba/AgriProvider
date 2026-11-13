@@ -1,8 +1,29 @@
 import { Platform } from 'react-native';
 
-const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, '');
-export const hasApiBaseUrl = Boolean(apiBaseUrl);
+const DEFAULT_API_BASE_URLS = [
+  'http://localhost:5000',
+  'http://127.0.0.1:5000',
+  'http://10.0.2.2:5000',
+  'http://192.168.137.1:5000',
+] as const;
+
+function normalizeApiBaseUrl(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  return trimmed.replace(/\/+$/, '');
+}
+
+const configuredApiBaseUrl = normalizeApiBaseUrl(process.env.EXPO_PUBLIC_API_URL);
+export const apiBaseUrl = configuredApiBaseUrl ?? DEFAULT_API_BASE_URLS[0];
+export const hasApiBaseUrl = Boolean(configuredApiBaseUrl || DEFAULT_API_BASE_URLS.length);
 export const cookieSessionCredential = 'http-only-cookie-session';
+
+function isPublicRoute(path: string) {
+  return path === '/api/auth/login'
+    || path === '/api/auth/register'
+    || path === '/api/auth/learner-activation'
+    || path.startsWith('/api/certificates/verify/');
+}
 
 type UnauthorizedHandler = () => void | Promise<void>;
 let unauthorizedHandler: UnauthorizedHandler | undefined;
@@ -32,12 +53,10 @@ export async function requestApi(
     body?: Record<string, unknown>;
   } = {},
 ): Promise<unknown> {
-  if (!apiBaseUrl) {
-    throw new ApiError('Set EXPO_PUBLIC_API_URL in mobile/.env and restart Expo.');
-  }
   const cookieSession = Platform.OS === 'web'
     && (options.authMode === 'cookie' || Boolean(options.token));
-  if (Platform.OS === 'web' && !cookieSession) {
+  const publicRequest = Platform.OS === 'web' && isPublicRoute(path);
+  if (Platform.OS === 'web' && !cookieSession && !publicRequest) {
     throw new ApiError('A secure web session is required for this request. Sign in again.');
   }
   if (Platform.OS !== 'web' && options.authMode === 'cookie') {
@@ -101,9 +120,6 @@ export async function uploadFile(
   asset: UploadAsset,
   onProgress: (progress: number) => void,
 ): Promise<unknown> {
-  if (!apiBaseUrl) {
-    throw new ApiError('Set EXPO_PUBLIC_API_URL in mobile/.env and restart Expo.');
-  }
   if (Platform.OS === 'web') {
     throw new ApiError('Evidence uploads are available in the iOS and Android apps.');
   }
@@ -151,9 +167,6 @@ export async function uploadFile(
 }
 
 export async function downloadFile(path: string, token: string): Promise<Uint8Array> {
-  if (!apiBaseUrl) {
-    throw new ApiError('Set EXPO_PUBLIC_API_URL in mobile/.env and restart Expo.');
-  }
   if (Platform.OS === 'web') {
     throw new ApiError('Evidence downloads are available in the iOS and Android apps.');
   }
@@ -189,10 +202,6 @@ export async function downloadPrivateFile(path: string, token: string): Promise<
   if (Platform.OS !== 'web') {
     return downloadFile(path, token);
   }
-  if (!apiBaseUrl) {
-    throw new ApiError('Set EXPO_PUBLIC_API_URL in mobile/.env and restart Expo.');
-  }
-
   let response: Response;
   try {
     response = await fetch(`${apiBaseUrl}${path}`, {

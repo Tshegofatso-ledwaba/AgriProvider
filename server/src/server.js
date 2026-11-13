@@ -13,8 +13,16 @@ if (!jwtSecret || jwtSecret.length < 32) {
   throw new Error('JWT_SECRET must be at least 32 characters long');
 }
 
+const defaultWebOrigins = [
+  'http://localhost:8081',
+  'http://localhost:8082',
+  'http://localhost:8083',
+  'http://127.0.0.1:8081',
+  'http://127.0.0.1:8082',
+  'http://127.0.0.1:8083',
+];
 const webOrigin = process.env.WEB_ORIGIN
-  || (process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:8081');
+  || (process.env.NODE_ENV === 'production' ? undefined : defaultWebOrigins.join(','));
 const database = createPool();
 const app = createApp(database, { jwtSecret, webOrigin });
 const server = app.listen(port, () => {

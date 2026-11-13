@@ -5,6 +5,56 @@ const { authenticate, requireRole } = require('./middleware/authenticate');
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const allowedFields = new Set(['name', 'description']);
 const programmeColumns = 'id, name, description, created_at, updated_at';
+const programmeProgressQuery = `WITH programme_scope AS (
+  SELECT id, provider_user_id
+  FROM programmes
+  WHERE id = $1 AND provider_user_id = $2 AND archived_at IS NULL
+), active_enrolments AS (
+  SELECT e.id, e.provider_user_id, e.programme_id
+  FROM enrolments e
+  JOIN programme_scope p ON p.id = e.programme_id AND p.provider_user_id = e.provider_user_id
+  WHERE e.status = 'active'
+), active_requirements AS (
+  SELECT r.id, r.provider_user_id, r.programme_id
+  FROM programme_evidence_requirements r
+  JOIN programme_scope p ON p.id = r.programme_id AND p.provider_user_id = r.provider_user_id
+  WHERE r.archived_at IS NULL
+), latest_submissions AS (
+  SELECT DISTINCT ON (s.enrolment_id, s.requirement_id)
+    s.enrolment_id, s.requirement_id, s.status
+  FROM evidence_submissions s
+  JOIN active_enrolments e ON e.id = s.enrolment_id
+    AND e.provider_user_id = s.provider_user_id AND e.programme_id = s.programme_id
+  ORDER BY s.enrolment_id, s.requirement_id, s.version DESC
+), evidence_slots AS (
+  SELECT e.id AS enrolment_id, r.id AS requirement_id, s.status
+  FROM active_enrolments e
+  CROSS JOIN active_requirements r
+  LEFT JOIN latest_submissions s ON s.enrolment_id = e.id AND s.requirement_id = r.id
+)
+SELECT p.id AS programme_id,
+  (SELECT COUNT(*)::integer FROM enrolments e
+   WHERE e.provider_user_id = p.provider_user_id AND e.programme_id = p.id AND e.status = 'active') AS active_enrolments,
+  (SELECT COUNT(*)::integer FROM enrolments e
+   WHERE e.provider_user_id = p.provider_user_id AND e.programme_id = p.id AND e.status = 'withdrawn') AS withdrawn_enrolments,
+  (SELECT COUNT(*)::integer FROM training_sessions s
+   WHERE s.provider_user_id = p.provider_user_id AND s.programme_id = p.id AND s.archived_at IS NULL) AS active_sessions,
+  (SELECT COUNT(*)::integer FROM attendance_records a
+   WHERE a.provider_user_id = p.provider_user_id AND a.programme_id = p.id) AS attendance_recorded,
+  (SELECT COUNT(*) FILTER (WHERE a.status = 'present')::integer FROM attendance_records a
+   WHERE a.provider_user_id = p.provider_user_id AND a.programme_id = p.id) AS attendance_present,
+  (SELECT COUNT(*) FILTER (WHERE a.status = 'absent')::integer FROM attendance_records a
+   WHERE a.provider_user_id = p.provider_user_id AND a.programme_id = p.id) AS attendance_absent,
+  (SELECT COUNT(*) FILTER (WHERE a.status = 'excused')::integer FROM attendance_records a
+   WHERE a.provider_user_id = p.provider_user_id AND a.programme_id = p.id) AS attendance_excused,
+  (SELECT COUNT(*)::integer FROM active_requirements) AS evidence_requirements,
+  (SELECT COUNT(*)::integer FROM evidence_slots) AS evidence_slots,
+  (SELECT COUNT(*) FILTER (WHERE status IS NULL)::integer FROM evidence_slots) AS evidence_not_submitted,
+  (SELECT COUNT(*) FILTER (WHERE status = 'SUBMITTED')::integer FROM evidence_slots) AS evidence_submitted,
+  (SELECT COUNT(*) FILTER (WHERE status = 'UNDER_REVIEW')::integer FROM evidence_slots) AS evidence_awaiting_review,
+  (SELECT COUNT(*) FILTER (WHERE status = 'APPROVED')::integer FROM evidence_slots) AS evidence_approved,
+  (SELECT COUNT(*) FILTER (WHERE status = 'CORRECTION_REQUIRED')::integer FROM evidence_slots) AS evidence_correction_required
+FROM programme_scope p`;
 
 function isObject(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -89,6 +139,25 @@ function createProgrammesRouter({ database, jwtSecret }) {
     }
   });
 
+  router.get('/:id/progress', async (request, response, next) => {
+    if (!uuidPattern.test(request.params.id)) {
+      return response.status(400).json({ error: 'Programme ID must be a UUID.' });
+    }
+
+    try {
+      const { rows } = await database.query(
+        programmeProgressQuery,
+        [request.params.id, request.auth.userId],
+      );
+      if (!rows[0]) {
+        return response.status(404).json({ error: 'Programme not found.' });
+      }
+      return response.json({ progress: rows[0] });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
   router.get('/:id', async (request, response, next) => {
     if (!uuidPattern.test(request.params.id)) {
       return response.status(400).json({ error: 'Programme ID must be a UUID.' });
@@ -168,4 +237,4 @@ function createProgrammesRouter({ database, jwtSecret }) {
   return router;
 }
 
-module.exports = { createProgrammesRouter, validateProgrammeBody };
+module.exports = { createProgrammesRouter, programmeProgressQuery, validateProgrammeBody };

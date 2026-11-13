@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const { authenticate, requireRole } = require('./middleware/authenticate');
+const { getLearnerCalendar, requireRange } = require('./calendar');
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -172,10 +173,15 @@ function createLearnerPortalRouter({ database, jwtSecret }) {
         return response.status(404).json({ error: 'No learner profile is linked to this account.' });
       }
 
-      const [programmes, attendance, evidence] = await Promise.all([
+      const now = new Date();
+      const [programmes, attendance, evidence, upcoming] = await Promise.all([
         listProgrammes(learner.id),
         getAttendance(learner.id),
         listEvidence(learner.id),
+        getLearnerCalendar(database, learner.id, {
+          from: now.toISOString(),
+          to: new Date(now.getTime() + 60 * 86_400_000).toISOString(),
+        }, { limit: 3 }),
       ]);
       const evidenceSummary = {
         total: evidence.length,
@@ -233,7 +239,22 @@ function createLearnerPortalRouter({ database, jwtSecret }) {
         evidence,
         evidenceSummary,
         recentActivity,
+        upcoming,
       });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.get('/calendar', async (request, response, next) => {
+    const range = requireRange(request.query);
+    if (range.error) return response.status(400).json({ error: range.error });
+    try {
+      const learner = await findLearner(request);
+      if (!learner) {
+        return response.status(404).json({ error: 'No learner profile is linked to this account.' });
+      }
+      return response.json({ range: range.value, ...(await getLearnerCalendar(database, learner.id, range.value)) });
     } catch (error) {
       return next(error);
     }

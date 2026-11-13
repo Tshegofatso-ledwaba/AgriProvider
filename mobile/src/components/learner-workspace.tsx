@@ -1,15 +1,16 @@
 import { useCallback, useState } from 'react';
 import { Link, useFocusEffect } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 
 import {
+  DashboardHero,
   EmptyNotice,
   ErrorNotice,
   LoadingNotice,
   Page,
   PageTitle,
   routeHref,
+  SummaryCard,
 } from '@/components/programme-ui';
 import { useAuth } from '@/providers/auth-provider';
 import {
@@ -57,13 +58,15 @@ export default function LearnerWorkspace({ section }: { section: LearnerSection 
   return (
     <Page onRefresh={() => void loadDashboard()} refreshing={loading}>
       {section === 'home' ? (
-        <View className="gap-1 pb-1">
-          <Text className="text-xl font-extrabold text-ink">Welcome back, {firstName}!</Text>
-          <Text className="text-sm leading-5 text-muted">
-            Here&apos;s an overview of your training journey.
-          </Text>
+        <View className="gap-2">
+          <DashboardHero
+            eyebrow="LEARNER PORTAL"
+            title={`Welcome back, ${firstName}`}
+            subtitle="Your recorded training, attendance and evidence in one place."
+            symbol={{ ios: 'graduationcap.fill', android: 'school', web: 'school' }}
+          />
           {dashboard?.learner.learnerReference ? (
-            <Text className="mt-1 text-xs font-bold text-muted">
+            <Text className="px-1 text-xs font-bold text-muted">
               Learner reference · {dashboard.learner.learnerReference}
             </Text>
           ) : null}
@@ -107,7 +110,7 @@ function LearnerHome({ dashboard }: { dashboard: LearnerDashboard }) {
         {programmes.length ? (
           <View className="gap-3">
             {programmes.slice(0, 2).map((programme) => (
-              <View key={programme.enrolmentId} className="gap-2 rounded-2xl bg-white p-4 shadow-sm shadow-black/5">
+              <View key={programme.enrolmentId} className="gap-2 rounded-2xl border border-border bg-white p-5 shadow-sm shadow-primary/5">
                 <View className="flex-row items-start justify-between gap-3">
                   <Text className="flex-1 text-base font-extrabold text-ink">{programme.name}</Text>
                   <StatusBadge status={programme.status === 'active' ? 'Active' : 'Withdrawn'} />
@@ -135,40 +138,52 @@ function LearnerHome({ dashboard }: { dashboard: LearnerDashboard }) {
 
       <ProgressSummary dashboard={dashboard} />
 
+      <View className="gap-3 rounded-2xl border border-primary/20 bg-white p-4 shadow-sm shadow-primary/5">
+        <View className="gap-1">
+          <Text className="text-base font-extrabold text-ink">Certificates</Text>
+          <Text className="text-sm leading-5 text-muted">Authorized certificates and prior certificate history appear after QA review and Administrator approval.</Text>
+        </View>
+        <Link href={routeHref('/learner/certificates')} asChild>
+          <Pressable accessibilityRole="button" className="min-h-11 items-center justify-center self-start rounded-xl bg-primary px-4 py-3 active:opacity-80">
+            <Text className="text-sm font-bold text-white">View certificate history</Text>
+          </Pressable>
+        </Link>
+      </View>
+
       <View className="gap-3">
         <Text className="text-base font-extrabold text-ink">At a glance</Text>
         <View className="flex-row flex-wrap gap-3">
-          <MetricCard
+          <SummaryCard
             symbol={{ ios: 'calendar.badge.checkmark', android: 'event_available', web: 'event_available' }}
             label="Attendance"
             value={attendanceRate === null ? '—' : `${attendanceRate}%`}
             detail={attendance.summary.recorded
               ? `${attendance.summary.present} of ${attendance.summary.recorded} recorded sessions`
               : 'No sessions recorded'}
-            tone="green"
+            tone="forest"
           />
-          <MetricCard
+          <SummaryCard
             symbol={{ ios: 'doc.text', android: 'description', web: 'description' }}
             label="Evidence"
             value={`${evidenceSummary.approved}/${evidenceSummary.total}`}
             detail={evidenceSummary.total
               ? `${evidenceSummary.approved} approved · ${evidenceSummary.notSubmitted} not submitted`
               : 'no requirements configured'}
-            tone="neutral"
+            tone="plain"
           />
-          <MetricCard
+          <SummaryCard
             symbol={{ ios: 'clock', android: 'schedule', web: 'schedule' }}
             label="Assessment"
             value={String(evidenceSummary.awaitingAssessment)}
             detail={`${evidenceSummary.approved} approved · ${evidenceSummary.correctionsRequired} corrections`}
-            tone={evidenceSummary.correctionsRequired ? 'amber' : 'neutral'}
+            tone={evidenceSummary.correctionsRequired ? 'amber' : 'plain'}
           />
-          <MetricCard
+          <SummaryCard
             symbol={{ ios: 'graduationcap', android: 'school', web: 'school' }}
             label="Programme"
             value={String(activeProgrammes.length)}
             detail={`${activeProgrammes.length === 1 ? 'active enrolment' : 'active enrolments'} · completion not tracked`}
-            tone="green"
+            tone="sage"
           />
         </View>
       </View>
@@ -195,7 +210,7 @@ function LearnerHome({ dashboard }: { dashboard: LearnerDashboard }) {
         )}
       </View>
 
-      <View className="gap-3 rounded-2xl bg-white p-4 shadow-sm shadow-black/5">
+      <View className="gap-3">
         <SectionHeading title="Evidence checklist" action="View all" href="/learner/evidence" />
         {dashboard.evidence.length ? (
           <View>
@@ -208,7 +223,7 @@ function LearnerHome({ dashboard }: { dashboard: LearnerDashboard }) {
         )}
       </View>
 
-      <View className="gap-3 rounded-[24px] border border-border bg-white p-4 shadow-sm shadow-black/5">
+      <View className="gap-3 rounded-2xl border border-border bg-white p-4 shadow-sm shadow-primary/5">
         <SectionHeading title="My attendance" action="View attendance" href="/learner/attendance" />
         <Text className="text-sm text-muted">
           {attendanceRate === null
@@ -289,7 +304,7 @@ function ProgressSummary({ dashboard }: { dashboard: LearnerDashboard }) {
   ];
 
   return (
-    <View className="gap-3 rounded-[24px] border border-border bg-white p-4 shadow-sm shadow-black/5">
+    <View className="gap-3 rounded-2xl border border-border bg-white p-4 shadow-sm shadow-primary/5">
       <Text className="text-base font-extrabold text-ink">My progress</Text>
       <Text className="text-sm leading-5 text-muted">
         Progress is shown from recorded activity; no percentage or completion score is calculated.
@@ -353,10 +368,10 @@ function AttendanceSection({ dashboard }: { dashboard: LearnerDashboard }) {
   return (
     <>
       <View className="flex-row flex-wrap gap-3">
-        <MetricCard label="Attendance" value={percentage === null ? '—' : `${percentage}%`} detail="of recorded sessions" tone="green" />
-        <MetricCard label="Present" value={String(summary.present)} detail="sessions attended" tone="green" />
-        <MetricCard label="Absent" value={String(summary.absent)} detail="recorded as absent" tone="amber" />
-        <MetricCard label="Recorded" value={String(summary.recorded)} detail={`${summary.excused} excused`} tone="neutral" />
+        <SummaryCard label="Attendance" value={percentage === null ? '—' : `${percentage}%`} detail="of recorded sessions" tone="forest" />
+        <SummaryCard label="Present" value={String(summary.present)} detail="sessions attended" tone="sage" />
+        <SummaryCard label="Absent" value={String(summary.absent)} detail="recorded as absent" tone="amber" />
+        <SummaryCard label="Recorded" value={String(summary.recorded)} detail={`${summary.excused} excused`} tone="plain" />
       </View>
       <View className="gap-3">
         <Text className="text-base font-extrabold text-ink">Recent attendance</Text>
@@ -473,30 +488,6 @@ function AttendanceRow({ record }: { record: LearnerDashboard['attendance']['rec
         <Text className="text-xs text-muted">{record.programmeName} · {formatDate(record.startsAt)}</Text>
       </View>
       <StatusBadge status={record.status} />
-    </View>
-  );
-}
-
-function MetricCard({
-  symbol,
-  label,
-  value,
-  detail,
-  tone,
-}: {
-  symbol?: SymbolViewProps['name'];
-  label: string;
-  value: string;
-  detail: string;
-  tone: 'green' | 'amber' | 'neutral';
-}) {
-  const color = tone === 'green' ? 'text-emerald-800' : tone === 'amber' ? 'text-amber-900' : 'text-ink';
-  return (
-    <View className="min-w-[145px] flex-1 gap-1 rounded-2xl border border-border bg-white p-4 shadow-sm shadow-black/5">
-      {symbol ? <SymbolView name={symbol} size={15} tintColor="#21764A" /> : null}
-      <Text className="text-xs font-bold text-muted">{label}</Text>
-      <Text className={`text-2xl font-extrabold ${color}`}>{value}</Text>
-      <Text className="text-xs leading-4 text-muted">{detail}</Text>
     </View>
   );
 }

@@ -57,7 +57,7 @@
       <div class="eyebrow">Developer reference</div>
       <h1>API<br>Documentation</h1>
       <p class="subtitle">Endpoint reference for authentication, provider operations, attendance, evidence review, assessor assignments, and the learner portal.</p>
-      <p class="muted">Version 1 · 10 November 2026</p>
+      <p class="muted">Version 1 · 12 November 2026</p>
     </div>
     <div class="cover-band">
       <strong>Scope</strong>
@@ -163,6 +163,7 @@ Content-Type: application/json
         <tr><td><span class="method">GET</span><code>/api/programmes</code></td><td>List active programmes owned by the provider: <code>{programmes:[...]}</code>.</td></tr>
         <tr><td><span class="method">POST</span><code>/api/programmes</code></td><td>Body: <code>{name, description?}</code>. Name 1–160 chars; description string/null up to 2,000 chars. Returns <code>201 {programme}</code>.</td></tr>
         <tr><td><span class="method">GET</span><code>/api/programmes/:id</code></td><td>Get an owned active programme: <code>{programme}</code>.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/programmes/:id/progress</code></td><td>Provider-owned factual activity counts: active/withdrawn enrolments, active sessions, attendance statuses, and latest evidence status per configured requirement for active enrolments. Returns <code>{progress}</code>; this is not an official completion score.</td></tr>
         <tr><td><span class="method">PATCH</span><code>/api/programmes/:id</code></td><td>Body contains at least one of <code>name</code>, <code>description</code>. Returns <code>{programme}</code>.</td></tr>
         <tr><td><span class="method">DELETE</span><code>/api/programmes/:id</code></td><td>Archives the programme; returns <code>{message}</code>. Related history is preserved.</td></tr>
       </tbody>
@@ -272,6 +273,33 @@ Content-Type: application/json
   </section>
 
   <section class="page section">
+    <h2>Quality assurance · assigned QA Officer</h2>
+    <p>QA routes require an active QA Officer account. Reads are restricted to programmes with an active administrator-managed QA assignment. QA outcomes are separate from immutable assessor decisions.</p>
+    <table>
+      <thead><tr><th>Method and path</th><th>Request / result</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method">GET</span><code>/api/qa/dashboard</code></td><td>Optional status, programmeId, q, limit, and offset filters; returns assigned programme scope, persisted QA counts, and assessment reviews.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/qa/submissions/:submissionId</code></td><td>Returns assigned assessor decision, evidence details, immutable QA outcome, and assessment/QA history.</td></tr>
+        <tr><td><span class="method">GET</span><code>/api/qa/submissions/:submissionId/file</code></td><td>Returns the private evidence file for an assigned QA review.</td></tr>
+        <tr><td><span class="method">POST</span><code>/api/qa/submissions/:submissionId/reviews</code></td><td>Body: <code>{decision, comments}</code>. Decision is VERIFIED, FURTHER_ACTION_REQUIRED, or NOT_VERIFIED; comments are required. The outcome is immutable and linked to the exact assessor review and evidence version.</td></tr>
+      </tbody>
+    </table>
+    <p>Persisted QA findings, provider corrective-action responses, verification, and closure are not implemented. Internal QA notes are not exposed through learner APIs.</p>
+  </section>
+
+  <section class="page section">
+    <h2>Notifications · authenticated user</h2>
+    <table>
+      <thead><tr><th>Method and path</th><th>Request / result</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method">GET</span><code>/api/notifications</code></td><td>Optional unreadOnly, category, limit (1–100), and offset filters. Returns only the caller's notifications, matching total, and inbox unreadCount.</td></tr>
+        <tr><td><span class="method">PATCH</span><code>/api/notifications/:id/read</code></td><td>Marks only the caller's notification read. A notification owned by another user returns 404.</td></tr>
+      </tbody>
+    </table>
+    <p>Database-generated QA assignment, review-queue, and outcome events are available in the inbox. Email, SMS, and push delivery are not configured.</p>
+  </section>
+
+  <section class="page section">
     <h2>Learner portal</h2>
     <p>All routes require an authenticated learner role. The API finds the caller's linked learner profile; clients cannot choose an arbitrary learner ID.</p>
     <table>
@@ -291,7 +319,7 @@ Content-Type: application/json
   "evidenceSummary": { "total": 0, "notSubmitted": 0, "awaitingAssessment": 0, "approved": 0, "correctionsRequired": 0 },
   "recentActivity": []
 }</pre>
-    <p>Attendance is read-only for learners. No learner upload, notification, announcement, QA verification, or official completion endpoint is implemented.</p>
+    <p>Attendance is read-only for learners. Learners can read their own notification records and high-level QA outcomes; internal QA comments and findings are not exposed. Learner uploads, announcements, and official completion are not implemented.</p>
   </section>
 
   <section class="page section">
@@ -314,12 +342,12 @@ Content-Type: application/json
       <li>Most JSON request bodies are limited to 16 KB.</li>
     </ul>
     <h2>Not implemented</h2>
-    <p>The API does not provide external AgriSETA/government integrations, payment execution, official accreditation or certification issuance, milestone eligibility, QA verification, learner evidence uploads, learner notifications or announcements, or a full audit system. Do not treat dashboard summaries as official completion or payment decisions.</p>
+    <p>The API does not provide external AgriSETA/government integrations, payment execution, official accreditation or certification issuance, milestone eligibility, persisted QA findings/corrective actions, learner evidence uploads, announcements, or a full audit review system. Do not treat dashboard summaries as official completion or payment decisions.</p>
     <div class="cover-band">
       <strong>Source of truth</strong>
       <p>This reference was compiled from the API routes, validation logic, and server documentation in the AgriProvider repository. The automated API suite uses an in-memory database stub; it is not proof of connectivity to a production database.</p>
     </div>
-    <p class="footnote">AgriProvider API Documentation · Version 1 · 10 November 2026</p>
+    <p class="footnote">AgriProvider API Documentation · Version 1 · 12 November 2026</p>
   </section>
 </body>
 </html>

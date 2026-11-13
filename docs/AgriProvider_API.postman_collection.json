@@ -13,7 +13,8 @@
   },
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:5000", "type": "string" },
-    { "key": "accessToken", "value": "", "type": "string" }
+    { "key": "accessToken", "value": "", "type": "string" },
+    { "key": "notificationId", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -60,6 +61,15 @@
       ]
     },
     {
+      "name": "QA Officer - Review Workflow",
+      "item": [
+        { "name": "List assigned QA reviews", "request": { "method": "GET", "url": "{{baseUrl}}/api/qa/dashboard?status=AWAITING_REVIEW", "description": "QA Officer only. Returns assessment records in the caller's active assigned programme scope." } },
+        { "name": "Get assigned QA assessment", "request": { "method": "GET", "url": "{{baseUrl}}/api/qa/submissions/{{submissionId}}", "description": "QA Officer only. Returns evidence details and assessment/QA history for assigned scope." } },
+        { "name": "Download assigned QA evidence", "request": { "method": "GET", "url": "{{baseUrl}}/api/qa/submissions/{{submissionId}}/file", "description": "QA Officer only. Returns a private evidence attachment for assigned scope." } },
+        { "name": "Record immutable QA outcome", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"decision\": \"FURTHER_ACTION_REQUIRED\",\n  \"comments\": \"{{qaComments}}\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{baseUrl}}/api/qa/submissions/{{submissionId}}/reviews", "description": "QA Officer only. Decision is VERIFIED, FURTHER_ACTION_REQUIRED, or NOT_VERIFIED. Comments required. Immutable and linked to the exact assessor review/evidence version." } }
+      ]
+    },
+    {
       "name": "Provider - Programmes",
       "item": [
         { "name": "List programmes", "request": { "method": "GET", "url": "{{baseUrl}}/api/programmes", "description": "Provider only. Returns active programmes owned by the authenticated provider." } },
@@ -69,8 +79,16 @@
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if (pm.response.code === 201) {", "  const body = pm.response.json();", "  if (body.programme && body.programme.id) pm.environment.set('programmeId', body.programme.id);", "}"] } }]
         },
         { "name": "Get programme", "request": { "method": "GET", "url": "{{baseUrl}}/api/programmes/{{programmeId}}", "description": "Provider only; returns a programme owned by the caller." } },
+        { "name": "Get programme activity summary", "request": { "method": "GET", "url": "{{baseUrl}}/api/programmes/{{programmeId}}/progress", "description": "Provider only. Returns enrolment, session, attendance, and latest evidence-status counts. These are factual activity counts, not an official completion score." } },
         { "name": "Update programme", "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"{{programmeName}}\",\n  \"description\": \"{{programmeDescription}}\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{baseUrl}}/api/programmes/{{programmeId}}", "description": "Provider only. Supply at least one of name or description." } },
         { "name": "Archive programme", "request": { "method": "DELETE", "url": "{{baseUrl}}/api/programmes/{{programmeId}}", "description": "Provider only. Archives the programme; it does not delete related history." } }
+      ]
+    },
+    {
+      "name": "User - Notifications",
+      "item": [
+        { "name": "List own notifications", "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/api/notifications?limit=50&offset=0", "query": [{ "key": "limit", "value": "50" }, { "key": "offset", "value": "0" }] }, "description": "Authenticated roles. Returns only the caller's notification records, total for this filter, and unreadCount. Optional unreadOnly and category filters." } },
+        { "name": "Mark own notification read", "request": { "method": "PATCH", "url": "{{baseUrl}}/api/notifications/{{notificationId}}/read", "description": "Authenticated recipient only. A notification owned by another user returns 404." } }
       ]
     },
     {

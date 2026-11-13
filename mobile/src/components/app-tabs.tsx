@@ -114,6 +114,16 @@ export default function AppTabs() {
       ) : null}
 
       {user?.role === 'learner' ? (
+        <NativeTabs.Trigger name="learner/calendar">
+          <NativeTabs.Trigger.Label>Timetable</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Icon
+            src={require('@/assets/images/tabIcons/explore.png')}
+            renderingMode="template"
+          />
+        </NativeTabs.Trigger>
+      ) : null}
+
+      {user?.role === 'learner' ? (
         <NativeTabs.Trigger name="learner/evidence">
           <NativeTabs.Trigger.Label>Evidence</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon

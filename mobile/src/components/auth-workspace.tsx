@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Link } from 'expo-router';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -12,9 +13,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { UserRole, useAuth } from '@/providers/auth-provider';
-import { apiErrorText, hasApiBaseUrl } from '@/services/api';
+import { apiErrorText, hasApiBaseUrl, isRecord, requestApi } from '@/services/api';
 
-type AuthMode = 'login' | 'register';
+type AuthMode = 'login' | 'register' | 'setup';
 
 const signInTypes: { role: UserRole; label: string }[] = [
   { role: 'provider', label: 'Provider' },
@@ -30,14 +31,51 @@ export default function AuthWorkspace() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [setupCode, setSetupCode] = useState('');
   const [accountType, setAccountType] = useState<UserRole>('provider');
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [isSubmittingSetup, setIsSubmittingSetup] = useState(false);
   const submitting = useRef(false);
 
   const submit = async () => {
     if (isBusy || submitting.current) return;
     setError('');
+    setSuccess('');
+    if (mode === 'setup') {
+      if (!/^[0-9a-f]{64}$/i.test(setupCode.trim())) {
+        setError('Enter the 64-character learner setup code from your provider.');
+        return;
+      }
+      if (password.length < 12) {
+        setError('Your password must be at least 12 characters.');
+        return;
+      }
+      submitting.current = true;
+      setIsSubmittingSetup(true);
+      try {
+        const payload = await requestApi('/api/auth/learner-activation', {
+          method: 'POST',
+          body: { token: setupCode.trim(), password },
+        });
+        if (!isRecord(payload) || !isRecord(payload.user) || typeof payload.user.email !== 'string') {
+          throw new Error('The API returned an unexpected learner setup response.');
+        }
+        setEmail(payload.user.email);
+        setAccountType('learner');
+        setSetupCode('');
+        setMode('login');
+        setSuccess('Password set. Sign in as Learner to open your workspace.');
+      } catch (requestError) {
+        setError(apiErrorText(requestError));
+      } finally {
+        submitting.current = false;
+        setIsSubmittingSetup(false);
+      }
+      return;
+    }
+
     if (mode === 'register' && !fullName.trim()) {
       setError('Enter your full name.');
       return;
@@ -83,7 +121,7 @@ export default function AuthWorkspace() {
           }`}
           keyboardShouldPersistTaps="handled">
           <View className="flex-row items-center gap-3">
-            <View className="h-12 w-12 items-center justify-center rounded-2xl bg-primary">
+            <View className="h-12 w-12 items-center justify-center rounded-2xl bg-primary shadow-sm shadow-primary/30">
               <Text className="text-2xl font-extrabold text-white">A</Text>
             </View>
             <View>
@@ -94,28 +132,30 @@ export default function AuthWorkspace() {
             </View>
           </View>
 
-          <View className="gap-3 py-3">
-            <Text className="text-xs font-extrabold tracking-widest text-primary">TRAINING WORKSPACE</Text>
-            <Text className="text-3xl font-extrabold leading-9 text-ink">
-              Training delivery, evidence and review in one place.
+          <View className="gap-3 rounded-[28px] border border-primary/15 bg-primary p-5 shadow-sm shadow-black/10">
+            <Text className="text-[11px] font-extrabold tracking-[0.2em] text-white/75">TRAINING WORKSPACE</Text>
+            <Text className="text-3xl font-extrabold leading-9 text-white">
+              Deliver training, evidence and review with clarity.
             </Text>
-            <Text className="text-base leading-6 text-muted">
-              AgriProvider connects providers, administrators, assessors and quality assurance teams through a secure workspace.
+            <Text className="text-base leading-6 text-white/80">
+              Keep providers, assessors, administrators and QA teams aligned from a single secure workflow.
             </Text>
           </View>
 
           <View className="gap-5 rounded-[28px] border border-border bg-white p-5 shadow-sm shadow-black/5">
             <View className="gap-3 rounded-2xl bg-primary/5 p-4">
               <Text className="text-[11px] font-extrabold tracking-[0.2em] text-primary">
-                {mode === 'login' ? 'WELCOME BACK' : 'CREATE ACCOUNT'}
+                {mode === 'login' ? 'WELCOME BACK' : mode === 'setup' ? 'LEARNER SETUP' : 'CREATE ACCOUNT'}
               </Text>
               <Text className="text-2xl font-extrabold text-ink">
-                {mode === 'login' ? 'Access your workspace' : 'Create a provider account'}
+                {mode === 'login' ? 'Access your workspace' : mode === 'setup' ? 'Set up learner access' : 'Create a provider account'}
               </Text>
               <Text className="text-sm leading-5 text-muted">
                 {mode === 'login'
                   ? 'Sign in to continue with your training operations.'
-                  : 'You are creating a Provider account for the training workspace.'}
+                  : mode === 'setup'
+                    ? 'Use the one-time setup code provided by your training provider.'
+                    : 'You are creating a Provider account for the training workspace.'}
               </Text>
             </View>
 
@@ -159,7 +199,7 @@ export default function AuthWorkspace() {
                   })}
                 </View>
                 <Text className="text-xs leading-5 text-muted">
-                  The role assigned to your account determines workspace access.
+                  Choose the workspace tied to your account. Access is controlled by your assigned role.
                 </Text>
               </View>
             ) : null}
@@ -174,17 +214,29 @@ export default function AuthWorkspace() {
                 editable={!isBusy}
               />
             ) : null}
-            <FormField
-              label="Work email"
-              value={email}
-              onChangeText={setEmail}
-              placeholder="name@example.com"
-              autoComplete="email"
-              keyboardType="email-address"
-              editable={!isBusy}
-            />
+            {mode === 'setup' ? (
+              <FormField
+                label="Learner setup code"
+                value={setupCode}
+                onChangeText={setSetupCode}
+                placeholder="Paste the one-time code"
+                autoComplete="off"
+                editable={!isBusy && !isSubmittingSetup}
+              />
+            ) : null}
+            {mode !== 'setup' ? (
+              <FormField
+                label="Work email"
+                value={email}
+                onChangeText={setEmail}
+                placeholder="name@example.com"
+                autoComplete="email"
+                keyboardType="email-address"
+                editable={!isBusy}
+              />
+            ) : null}
             <View className="gap-2">
-              <Text className="text-sm font-bold text-ink">Password</Text>
+              <Text className="text-sm font-bold text-ink">{mode === 'setup' ? 'Choose a password' : 'Password'}</Text>
               <View className="min-h-12 flex-row items-center rounded-xl border border-border bg-white px-4">
                 <TextInput
                   accessibilityLabel="Password"
@@ -197,7 +249,7 @@ export default function AuthWorkspace() {
                   autoCapitalize="none"
                   autoCorrect={false}
                   secureTextEntry={!passwordVisible}
-                  editable={!isBusy}
+                  editable={!isBusy && !isSubmittingSetup}
                   onSubmitEditing={() => void submit()}
                   returnKeyType="go"
                 />
@@ -214,6 +266,7 @@ export default function AuthWorkspace() {
                 </Pressable>
               </View>
             </View>
+            {success ? <Text className="text-sm text-emerald-700" accessibilityRole="alert">{success}</Text> : null}
             {error || sessionError ? (
               <Text className="text-sm leading-5 text-danger" accessibilityRole="alert">
                 {error || sessionError}
@@ -226,39 +279,66 @@ export default function AuthWorkspace() {
             ) : null}
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{ disabled: isBusy || !hasApiBaseUrl, busy: isBusy }}
+              accessibilityState={{ disabled: isBusy || isSubmittingSetup || !hasApiBaseUrl, busy: isBusy || isSubmittingSetup }}
               className={`min-h-12 flex-row items-center justify-center rounded-2xl bg-primary px-4 py-4 ${
-                isBusy || !hasApiBaseUrl ? 'opacity-50' : 'active:opacity-80'
+                isBusy || isSubmittingSetup || !hasApiBaseUrl ? 'opacity-50' : 'active:opacity-80'
               }`}
               onPress={() => void submit()}
-              disabled={isBusy || !hasApiBaseUrl}>
-              {isBusy ? (
+              disabled={isBusy || isSubmittingSetup || !hasApiBaseUrl}>
+              {isBusy || isSubmittingSetup ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <Text className="text-center text-base font-extrabold text-white">
-                  {mode === 'login' ? 'Sign in securely' : 'Create provider account'}
+                  {mode === 'login' ? 'Sign in securely' : mode === 'setup' ? 'Set learner password' : 'Create provider account'}
                 </Text>
               )}
             </Pressable>
 
             <View className="flex-row flex-wrap items-center justify-center gap-1">
-              <Text className="text-sm text-muted">
-                {mode === 'login' ? 'New to AgriProvider?' : 'Already have an account?'}
-              </Text>
+              {mode !== 'setup' ? (
+                <>
+                  <Text className="text-sm text-muted">
+                    {mode === 'login' ? 'New to AgriProvider?' : 'Already have an account?'}
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={isBusy}
+                    onPress={() => {
+                      setMode(mode === 'login' ? 'register' : 'login');
+                      setPasswordVisible(false);
+                      setError('');
+                      setSuccess('');
+                      clearSessionError();
+                    }}>
+                    <Text className="p-1 text-sm font-extrabold text-primary">
+                      {mode === 'login' ? 'Create account' : 'Sign in'}
+                    </Text>
+                  </Pressable>
+                </>
+              ) : null}
+            </View>
+
+            {mode === 'login' ? (
               <Pressable
                 accessibilityRole="button"
                 disabled={isBusy}
                 onPress={() => {
-                  setMode(mode === 'login' ? 'register' : 'login');
-                  setPasswordVisible(false);
+                  setMode('setup');
                   setError('');
-                  clearSessionError();
+                  setSuccess('');
+                  setPassword('');
                 }}>
-                <Text className="p-1 text-sm font-extrabold text-primary">
-                  {mode === 'login' ? 'Create account' : 'Sign in'}
-                </Text>
+                <Text className="text-center text-sm font-bold text-primary">Set up a learner account</Text>
               </Pressable>
-            </View>
+            ) : null}
+
+            {mode === 'login' ? (
+              <Link href="/verify-certificate" asChild>
+                <Pressable accessibilityRole="button" className="min-h-10 items-center justify-center rounded-xl border border-border bg-surface px-4 py-2 active:opacity-70">
+                  <Text className="text-sm font-bold text-primary">Verify a certificate</Text>
+                </Pressable>
+              </Link>
+            ) : null}
 
             <Text className="border-t border-border pt-3 text-center text-xs leading-5 text-muted">
               Passwords are protected on the server. Web sessions use an HttpOnly cookie; mobile tokens use secure device storage.
@@ -284,7 +364,7 @@ function FormField({
   value: string;
   onChangeText: (value: string) => void;
   placeholder: string;
-  autoComplete: 'name' | 'email' | 'current-password' | 'new-password';
+  autoComplete: 'name' | 'email' | 'current-password' | 'new-password' | 'off';
   keyboardType?: 'default' | 'email-address';
   secureTextEntry?: boolean;
   editable: boolean;
@@ -301,7 +381,7 @@ function FormField({
         placeholderTextColor="#8B9691"
         autoComplete={autoComplete}
         keyboardType={keyboardType ?? 'default'}
-        autoCapitalize={secureTextEntry || keyboardType === 'email-address' ? 'none' : 'words'}
+        autoCapitalize={secureTextEntry || keyboardType === 'email-address' || autoComplete === 'off' ? 'none' : 'words'}
         autoCorrect={false}
         secureTextEntry={secureTextEntry}
         editable={editable}

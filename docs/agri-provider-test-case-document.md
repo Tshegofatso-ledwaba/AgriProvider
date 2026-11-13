@@ -9,7 +9,8 @@ AgriProvider is a mobile-first training-provider and quality-assurance workspace
 - Provider registration and authentication
 - Provider programme, learner, enrolment, attendance, and evidence management
 - Admin assignment and assessor review workflow
-- QA role shell and access restrictions
+- Assignment-scoped QA review and access restrictions
+- Recipient-scoped notification inbox and read state
 - Protected routes and authorization checks
 - Error handling and duplicate validation
 - Local development configuration and environment setup
@@ -27,7 +28,8 @@ AgriProvider is a mobile-first training-provider and quality-assurance workspace
 - Backend API test suite: PASS
 - Mobile lint: PASS
 - TypeScript compile check: PASS
-- QA workflow: intentionally informational-only until approved backend support is implemented
+- QA outcomes: assignment-scoped, immutable, and version-bound; findings/corrective actions remain pending workflow approval
+- Notification inbox: recipient isolation and read updates tested; PostgreSQL QA triggers verified on the development/test database
 
 ## 5. Test Cases
 
@@ -123,12 +125,13 @@ AgriProvider is a mobile-first training-provider and quality-assurance workspace
   2. Upload a new version after the correction state.
 - Expected result: new version is accepted only after an explicit correction decision.
 
-### TC-14: QA role restriction
-- Objective: Confirm QA remains a role-only shell until implemented.
+### TC-14: QA assignment scope and immutable outcome
+- Objective: Ensure QA review is distinct from assessor decisions and limited to assigned programmes.
 - Steps:
-  1. Sign in as QA user.
-  2. Open QA dashboard.
-- Expected result: QA page displays a clear “workflow not enabled” state and does not simulate workflows.
+  1. Sign in as a QA Officer with an active programme assignment.
+  2. Open the assigned assessment and record a QA outcome.
+  3. Attempt to access an unassigned programme or record another QA outcome for the same assessor review.
+- Expected result: assigned evidence is readable; unassigned records are denied; QA outcome is a separate immutable record linked to the exact assessor review/version.
 
 ### TC-15: Web origin/session authentication
 - Objective: Validate cookie-based checkout and origin control.
@@ -143,13 +146,22 @@ AgriProvider is a mobile-first training-provider and quality-assurance workspace
   1. Trigger invalid JSON, invalid route, missing auth, and DB outage conditions.
 - Expected result: no stack traces are exposed; user-safe errors are returned.
 
+### TC-17: Notification inbox ownership
+- Objective: Ensure each role can read and mark only its own persisted notifications.
+- Steps:
+  1. Sign in as QA, provider, or learner and list notifications.
+  2. Mark one notification as read.
+  3. Attempt to mark another user's notification as read.
+- Expected result: only the recipient's notifications are returned or updated; other recipients' records return 404.
+
 ## 6. Known limitations
 
-- QA workflow is intentionally not implemented in this milestone.
+- QA assessment outcomes and notification events are implemented. Persisted findings/corrective actions, provider response permissions, corrective-action verification/closure, and their visibility rules remain pending confirmation.
+- Email, SMS, and push notification delivery are not configured.
 - Certification and milestone eligibility remain out of scope.
 - Production Neon and cloud storage are not configured here.
 - Local evidence storage is development-only and not production-ready.
 
 ## 7. Final status
 
-The project currently satisfies the verified API, role, and mobile checks in the repository. The QA workflow remains intentionally disabled until an approved backend rule set is implemented.
+The project has assignment-scoped QA assessment outcomes and a recipient-scoped in-app notification inbox. Corrective-action workflow remains incomplete until its authorized roles, visibility, and transitions are confirmed.

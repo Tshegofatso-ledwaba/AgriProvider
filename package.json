@@ -1,0 +1,13 @@
+{
+  "name": "agriprovider",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -k -n server,mobile \"npm --prefix server run dev\" \"npm --prefix mobile run web -- --clear\"",
+    "server": "npm --prefix server run dev",
+    "mobile": "npm --prefix mobile run web -- --clear",
+    "test": "npm --prefix server run test && npm --prefix mobile exec tsc --noEmit"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}

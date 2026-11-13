@@ -10,6 +10,7 @@ import {
   PageTitle,
   QaOnly,
 } from '@/components/programme-ui';
+import { RecordFindingForm } from '@/components/record-finding-form';
 import { useAuth } from '@/providers/auth-provider';
 import { apiErrorText } from '@/services/api';
 import {
@@ -170,6 +171,10 @@ function QASubmissionReview() {
               <Text className="text-xs leading-4 text-muted">QA outcomes are separate from and do not overwrite assessor decisions.</Text>
             </View>
           )}
+
+          {record.qa_review_id && credential ? (
+            <RecordFindingForm token={credential} qaReviewId={record.qa_review_id} />
+          ) : null}
 
           <View className="gap-3">
             <Text className="text-base font-extrabold text-ink">Assessment and QA history</Text>

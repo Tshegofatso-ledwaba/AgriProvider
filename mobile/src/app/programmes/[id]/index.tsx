@@ -14,7 +14,13 @@ import {
 import { useAuth } from '@/providers/auth-provider';
 import { apiErrorText } from '@/services/api';
 import { Enrolment, listEnrolments } from '@/services/enrolments';
-import { archiveProgramme, getProgramme, Programme } from '@/services/programmes';
+import {
+  archiveProgramme,
+  getProgramme,
+  getProgrammeProgress,
+  Programme,
+  ProgrammeProgress,
+} from '@/services/programmes';
 
 export default function ProgrammeDetailsScreen() {
   return (
@@ -29,6 +35,7 @@ function ProgrammeDetails() {
   const router = useRouter();
   const { credential } = useAuth();
   const [programme, setProgramme] = useState<Programme | null>(null);
+  const [progress, setProgress] = useState<ProgrammeProgress | null>(null);
   const [enrolments, setEnrolments] = useState<Enrolment[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -44,12 +51,14 @@ function ProgrammeDetails() {
     setLoading(true);
     setError('');
     try {
-      const [programmeRecord, enrolmentResult] = await Promise.all([
+      const [programmeRecord, enrolmentResult, progressSummary] = await Promise.all([
         getProgramme(credential, id),
         listEnrolments(credential, { programmeId: id, status: 'all' }),
+        getProgrammeProgress(credential, id),
       ]);
       setProgramme(programmeRecord);
       setEnrolments(enrolmentResult.enrolments);
+      setProgress(progressSummary);
     } catch (requestError) {
       setError(apiErrorText(requestError));
     } finally {
@@ -98,6 +107,7 @@ function ProgrammeDetails() {
               {programme.description || 'No description added.'}
             </Text>
           </View>
+          {progress ? <ProgrammeProgressSummary progress={progress} /> : null}
           <View className="gap-3 rounded-2xl border border-border bg-white p-5">
             <View className="flex-row items-center justify-between gap-3">
               <Text className="text-base font-bold text-ink">Enrolled learners</Text>
@@ -132,6 +142,11 @@ function ProgrammeDetails() {
             onPress={() => router.push(routeHref(`/programmes/${programme.id}/evidence-requirements`))}
             variant="secondary"
           />
+          <ActionButton
+            label="Configure certificate rules"
+            onPress={() => router.push(routeHref(`/programmes/${programme.id}/certificates`))}
+            variant="secondary"
+          />
           {error ? <Text className="text-sm text-danger" accessibilityRole="alert">{error}</Text> : null}
           <ActionButton
             label="Edit programme"
@@ -141,5 +156,50 @@ function ProgrammeDetails() {
         </>
       ) : null}
     </Page>
+  );
+}
+
+function ProgrammeProgressSummary({ progress }: { progress: ProgrammeProgress }) {
+  return (
+    <View className="gap-4 rounded-2xl border border-border bg-white p-5">
+      <View className="gap-1">
+        <Text className="text-base font-bold text-ink">Programme activity</Text>
+        <Text className="text-sm leading-5 text-muted">
+          Counts reflect recorded activity and configured evidence only. They do not determine official programme completion.
+        </Text>
+      </View>
+      <View className="gap-2">
+        <Text className="text-xs font-bold uppercase tracking-wider text-muted">Enrolment and delivery</Text>
+        <ProgressRow label="Active enrolments" value={progress.active_enrolments} />
+        <ProgressRow label="Withdrawn enrolments" value={progress.withdrawn_enrolments} />
+        <ProgressRow label="Active sessions" value={progress.active_sessions} />
+      </View>
+      <View className="gap-2 border-t border-border pt-3">
+        <Text className="text-xs font-bold uppercase tracking-wider text-muted">Recorded attendance</Text>
+        <ProgressRow label="Total records" value={progress.attendance_recorded} />
+        <ProgressRow label="Present" value={progress.attendance_present} />
+        <ProgressRow label="Absent" value={progress.attendance_absent} />
+        <ProgressRow label="Excused" value={progress.attendance_excused} />
+      </View>
+      <View className="gap-2 border-t border-border pt-3">
+        <Text className="text-xs font-bold uppercase tracking-wider text-muted">Evidence status</Text>
+        <ProgressRow label="Active checklist requirements" value={progress.evidence_requirements} />
+        <ProgressRow label="Requirement slots for active learners" value={progress.evidence_slots} />
+        <ProgressRow label="Not submitted" value={progress.evidence_not_submitted} />
+        <ProgressRow label="Submitted" value={progress.evidence_submitted} />
+        <ProgressRow label="Awaiting assessment" value={progress.evidence_awaiting_review} />
+        <ProgressRow label="Approved" value={progress.evidence_approved} />
+        <ProgressRow label="Correction required" value={progress.evidence_correction_required} />
+      </View>
+    </View>
+  );
+}
+
+function ProgressRow({ label, value }: { label: string; value: number }) {
+  return (
+    <View className="flex-row items-start justify-between gap-4">
+      <Text className="flex-1 text-sm text-muted">{label}</Text>
+      <Text className="text-sm font-bold tabular-nums text-ink">{value}</Text>
+    </View>
   );
 }

@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { SymbolView } from 'expo-symbols';
+import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 
 import { UserRole, useAuth } from '@/providers/auth-provider';
 import { apiErrorText } from '@/services/api';
@@ -29,6 +29,23 @@ export function navigateBack(router: ReturnType<typeof useRouter>, fallbackPath:
     router.back();
   } else {
     router.replace(routeHref(fallbackPath));
+  }
+}
+
+export function getRoleHomeRoute(role?: UserRole): string | null {
+  switch (role) {
+    case 'admin':
+      return '/admin';
+    case 'assessor':
+      return '/assessor';
+    case 'qa':
+      return '/qa';
+    case 'learner':
+      return '/learner';
+    case 'provider':
+      return null;
+    default:
+      return null;
   }
 }
 
@@ -61,6 +78,15 @@ function backTargetForPath(
   }
   if (section === 'learner') {
     return '/learner';
+  }
+  if (section === 'qa') {
+    return second === 'findings' && third ? '/qa/findings' : '/qa';
+  }
+  if (section === 'admin') {
+    return '/admin';
+  }
+  if (section === 'provider' && second === 'qa-actions') {
+    return third ? '/provider/qa-actions' : '/';
   }
 
   if (['programmes', 'learners', 'enrolments', 'sessions'].includes(section ?? '')) {
@@ -118,7 +144,8 @@ function RoleOnly({ children, roles }: PropsWithChildren & { roles: UserRole[] }
     );
   }
   if (!user || !roles.includes(user.role)) {
-    return <Redirect href="/" />;
+    const fallback = user ? getRoleHomeRoute(user.role) ?? '/' : '/';
+    return <Redirect href={routeHref(fallback)} />;
   }
   return children;
 }
@@ -146,8 +173,8 @@ export function Page({
   const router = useRouter();
   const pathname = usePathname();
   const learnerWorkspace = user?.role === 'learner';
-  const maxWidthClass = learnerWorkspace ? 'max-w-xl' : 'max-w-3xl';
-  const pageBackgroundClass = learnerWorkspace ? 'bg-[#F4F8F5]' : 'bg-[#F4F1ED]';
+  const maxWidthClass = learnerWorkspace ? 'max-w-3xl' : 'max-w-5xl';
+  const pageBackgroundClass = 'bg-surface';
   const { learnerId, programmeId } = useGlobalSearchParams<{
     learnerId?: string;
     programmeId?: string;
@@ -161,6 +188,7 @@ export function Page({
         { label: 'Learners', href: '/learners' },
         { label: 'Enrolments', href: '/enrolments' },
         { label: 'Attendance', href: '/sessions' },
+        { label: 'QA corrective actions', href: '/provider/qa-actions' },
         { label: 'Profile', href: '/explore' },
       ]
     : user?.role === 'assessor'
@@ -171,11 +199,15 @@ export function Page({
       : user?.role === 'admin'
         ? [
             { label: 'Assignments', href: '/admin' },
+          { label: 'Certificate authorization', href: '/admin/certificates' },
+            { label: 'QA programme access', href: '/admin/qa-assignments' },
+            { label: 'QA finding options', href: '/admin/qa-finding-options' },
             { label: 'Profile', href: '/explore' },
           ]
         : user?.role === 'qa'
           ? [
               { label: 'Quality assurance', href: '/qa' },
+              { label: 'Findings', href: '/qa/findings' },
               { label: 'Profile', href: '/explore' },
           ]
           : user?.role === 'learner'
@@ -249,14 +281,14 @@ export function Page({
   const content = (
     <>
       <View className="relative z-20 px-4 pt-4">
-        <View className={`mx-auto w-full ${maxWidthClass} rounded-[24px] border border-border bg-white/90 px-3 py-2 shadow-sm shadow-black/5`}>
+        <View className={`mx-auto w-full ${maxWidthClass} rounded-2xl border border-border bg-white px-3 py-2 shadow-sm shadow-primary/5`}>
           <View className="flex-row items-center gap-3">
             {backTarget ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Go back"
                 accessibilityHint="Return to the previous screen"
-                className="h-10 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-[#F4F1ED] active:opacity-70"
+                className="h-10 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface active:opacity-70"
                 onPress={() => navigateBack(router, backTarget)}>
                 <Text className="text-2xl font-bold leading-7 text-primary">‹</Text>
               </Pressable>
@@ -275,7 +307,7 @@ export function Page({
             </View>
 
             {user?.role === 'provider' ? (
-              <View className="ml-1 min-w-0 flex-1 flex-row items-center rounded-full border border-border bg-[#F4F1ED] pl-3 pr-1">
+              <View className="ml-1 min-w-0 flex-1 flex-row items-center rounded-full border border-border bg-surface pl-3 pr-1">
                 <TextInput
                   accessibilityLabel="Search workspace"
                   className="min-w-0 flex-1 py-2 text-xs text-ink"
@@ -287,7 +319,7 @@ export function Page({
                   }}
                   onSubmitEditing={() => void runWorkspaceSearch()}
                   placeholder="Search workspace"
-                  placeholderTextColor="#68736E"
+                  placeholderTextColor="#5C6D67"
                   returnKeyType="search"
                   autoCapitalize="none"
                 />
@@ -303,26 +335,28 @@ export function Page({
               </View>
             ) : null}
 
-            {learnerWorkspace ? (
-              <>
+            {user ? (
+              <Link href={routeHref('/notifications')} asChild>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Notifications unavailable"
-                  accessibilityHint="Learner notifications are not available yet."
-                  accessibilityState={{ disabled: true }}
-                  className="h-10 w-10 items-center justify-center rounded-full"
-                  disabled>
+                  accessibilityLabel="Open notifications"
+                  className="h-10 w-10 items-center justify-center rounded-full bg-selected active:opacity-70">
                   <SymbolView
                     name={{ ios: 'bell', android: 'notifications', web: 'notifications' }}
                     size={18}
-                    tintColor="#728078"
+                    tintColor="#173F35"
                   />
                 </Pressable>
+              </Link>
+            ) : null}
+
+            {learnerWorkspace ? (
+              <>
                 <Link href={routeHref('/explore')} asChild>
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Open profile"
-                    className="h-10 w-10 items-center justify-center rounded-full bg-[#E4EFE8] active:opacity-70">
+                    className="h-10 w-10 items-center justify-center rounded-full bg-selected active:opacity-70">
                     <Text className="text-xs font-extrabold text-primary">
                       {user.fullName.trim().split(/\s+/).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join('') || 'L'}
                     </Text>
@@ -334,7 +368,7 @@ export function Page({
                 accessibilityRole="button"
                 accessibilityLabel={menuOpen ? 'Close menu' : 'Open menu'}
                 accessibilityState={{ expanded: menuOpen }}
-                className="h-10 w-10 items-center justify-center rounded-full border border-border bg-[#F4F1ED] active:opacity-70"
+                className="ml-auto h-10 w-10 items-center justify-center rounded-full border border-border bg-surface active:opacity-70"
                 onPress={() => {
                   setSearchOpen(false);
                   setMenuError('');
@@ -474,9 +508,71 @@ export function Page({
 
 export function PageTitle({ title, subtitle }: { title: string; subtitle: string }) {
   return (
-    <View className="gap-1 pt-1">
+    <View className="gap-1 border-l-[3px] border-primary pl-3 pt-1">
       <Text className="text-2xl font-extrabold text-ink">{title}</Text>
       <Text className="text-sm leading-5 text-muted">{subtitle}</Text>
+    </View>
+  );
+}
+
+export function DashboardHero({
+  eyebrow,
+  title,
+  subtitle,
+  symbol,
+}: {
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  symbol: SymbolViewProps['name'];
+}) {
+  return (
+    <View className="flex-row items-start justify-between gap-4 overflow-hidden rounded-2xl border border-primary/20 bg-primary p-5 shadow-md shadow-primary/10">
+      <View className="flex-1 gap-2">
+        <Text className="text-[10px] font-extrabold text-white/75">{eyebrow.toUpperCase()}</Text>
+        <Text className="text-2xl font-extrabold text-white">{title}</Text>
+        <Text className="text-sm leading-5 text-white/80">{subtitle}</Text>
+      </View>
+      <View className="h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10">
+        <SymbolView name={symbol} size={20} tintColor="#E4F0E7" />
+      </View>
+    </View>
+  );
+}
+
+export function SummaryCard({
+  label,
+  value,
+  detail,
+  symbol,
+  tone = 'sage',
+}: {
+  label: string;
+  value: string | number;
+  detail?: string;
+  symbol?: SymbolViewProps['name'];
+  tone?: 'forest' | 'sage' | 'amber' | 'plain';
+}) {
+  const toneClass = tone === 'forest'
+    ? 'border-primary bg-primary'
+    : tone === 'amber'
+      ? 'border-amber-200 bg-amber-50'
+      : tone === 'plain'
+        ? 'border-border bg-white'
+        : 'border-emerald-100 bg-[#F0F7F1]';
+  const foregroundClass = tone === 'forest' ? 'text-white' : 'text-ink';
+  const secondaryClass = tone === 'forest' ? 'text-white/75' : 'text-muted';
+
+  return (
+    <View className={`min-w-[145px] flex-1 gap-3 rounded-2xl border p-4 shadow-sm shadow-primary/5 ${toneClass}`}>
+      <View className="flex-row items-center justify-between gap-2">
+        <Text className={`flex-1 text-xs font-bold ${secondaryClass}`}>{label}</Text>
+        {symbol ? (
+          <SymbolView name={symbol} size={17} tintColor={tone === 'forest' ? '#D8E9DC' : '#173F35'} />
+        ) : null}
+      </View>
+      <Text className={`text-3xl font-extrabold ${foregroundClass}`}>{value}</Text>
+      {detail ? <Text className={`text-xs leading-4 ${secondaryClass}`}>{detail}</Text> : null}
     </View>
   );
 }

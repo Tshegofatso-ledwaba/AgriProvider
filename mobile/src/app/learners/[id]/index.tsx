@@ -14,7 +14,7 @@ import {
 import { useAuth } from '@/providers/auth-provider';
 import { apiErrorText } from '@/services/api';
 import { Enrolment, listEnrolments } from '@/services/enrolments';
-import { archiveLearner, getLearner, Learner } from '@/services/learners';
+import { activateLearnerAccount, archiveLearner, getLearner, Learner } from '@/services/learners';
 
 export default function LearnerDetailsScreen() {
   return <ProviderOnly><LearnerDetails /></ProviderOnly>;
@@ -29,6 +29,7 @@ function LearnerDetails() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [invitation, setInvitation] = useState<{ token: string; expiresAt: string } | null>(null);
 
   const loadLearner = useCallback(async () => {
     if (!credential || !id) {
@@ -51,6 +52,23 @@ function LearnerDetails() {
       setLoading(false);
     }
   }, [credential, id]);
+
+  const activateAccount = async () => {
+    if (!credential || !id || !learner?.email) return;
+    setBusy(true);
+    setError('');
+    try {
+      const result = await activateLearnerAccount(credential, id);
+      setLearner(result.learner);
+      setInvitation(result.invitationToken && result.invitationExpiresAt
+        ? { token: result.invitationToken, expiresAt: result.invitationExpiresAt }
+        : null);
+    } catch (requestError) {
+      setError(apiErrorText(requestError));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   useFocusEffect(useCallback(() => {
     void loadLearner();
@@ -84,17 +102,36 @@ function LearnerDetails() {
         <>
           <PageTitle title={learner.full_name} subtitle={`Learner reference ${learner.learner_reference}`} />
           <View className="gap-3 rounded-2xl border border-border bg-white p-5">
-            <InfoRow label="Status" value={learner.status} />
+            <InfoRow label="Status" value={learner.status === 'active' ? 'Active record' : 'Archived'} />
+            <InfoRow
+              label="Sign-in access"
+              value={learner.account_status === 'active'
+                ? 'Linked to learner account'
+                : invitation ? 'Setup code issued' : learner.email ? 'Setup available' : 'Email required'}
+            />
             <InfoRow label="Registered" value={new Date(learner.created_at).toLocaleDateString()} />
             <InfoRow label="Phone" value={learner.phone || 'Not provided'} />
             <InfoRow label="Email" value={learner.email || 'Not provided'} />
           </View>
-          <View className="gap-2 rounded-2xl bg-selected p-5">
-            <Text className="text-sm font-bold text-primary">Workflow progress</Text>
-            <Text className="text-sm leading-5 text-muted">
-              Attendance and evidence summaries will appear here as those workflow phases become available.
-            </Text>
-          </View>
+          {learner.email && learner.account_status !== 'active' ? (
+            <View className="gap-2 rounded-2xl bg-selected p-5">
+              <Text className="text-sm font-bold text-primary">Learner account setup</Text>
+              <Text className="text-sm leading-5 text-muted">
+                Generate a one-time setup code. Share it with the learner through your approved secure channel.
+              </Text>
+            </View>
+          ) : null}
+          {invitation ? (
+            <View className="gap-2 rounded-2xl border border-primary/20 bg-white p-5">
+              <Text className="text-sm font-bold text-ink">One-time learner setup code</Text>
+              <Text selectable className="rounded-xl bg-surface p-3 font-mono text-sm text-primary">
+                {invitation.token}
+              </Text>
+              <Text className="text-xs leading-5 text-muted">
+                Expires {new Date(invitation.expiresAt).toLocaleString()}. This code can be used once to set the learner password.
+              </Text>
+            </View>
+          ) : null}
           <View className="gap-3 rounded-2xl border border-border bg-white p-5">
             <View className="flex-row items-center justify-between gap-3">
               <Text className="text-base font-bold text-ink">Programme enrolments</Text>
@@ -122,6 +159,13 @@ function LearnerDetails() {
           {error ? <Text className="text-sm text-danger" accessibilityRole="alert">{error}</Text> : null}
           {learner.status === 'active' ? (
             <>
+              {learner.email && learner.account_status !== 'active' ? (
+                <ActionButton
+                  label={busy ? 'Creating setup code...' : invitation ? 'Create a new setup code' : 'Create learner setup code'}
+                  onPress={() => void activateAccount()}
+                  disabled={busy}
+                />
+              ) : null}
               <ActionButton label="Edit learner" onPress={() => router.push(routeHref(`/learners/${learner.id}/edit`))} />
               <ActionButton label="Archive learner" onPress={confirmArchive} variant="danger" disabled={busy} />
             </>

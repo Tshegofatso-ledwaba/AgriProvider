@@ -6,12 +6,13 @@ import {
   ActionButton,
   AdminOnly,
   ConfirmDialog,
+  DashboardHero,
   EmptyNotice,
   ErrorNotice,
   LoadingNotice,
   Page,
-  PageTitle,
   routeHref,
+  SummaryCard,
 } from '@/components/programme-ui';
 import { useAuth } from '@/providers/auth-provider';
 import { apiErrorText } from '@/services/api';
@@ -146,10 +147,25 @@ function AdminAssignments() {
 
   return (
     <Page>
-      <PageTitle title="Administrator workspace" subtitle="Manage assessor access and programme assignments." />
+      <DashboardHero
+        eyebrow="OPERATIONS"
+        title="Administrator workspace"
+        subtitle="Manage assessor access and programme assignments."
+        symbol={{ ios: 'person.3.fill', android: 'groups', web: 'groups' }}
+      />
       <Link href={routeHref('/admin/qa-assignments')} asChild>
         <Pressable accessibilityRole="button" className="min-h-11 items-center justify-center self-start rounded-xl border border-border bg-white px-4 py-3 active:opacity-80">
           <Text className="text-sm font-bold text-ink">Manage QA programme access</Text>
+        </Pressable>
+      </Link>
+      <Link href={routeHref('/admin/qa-finding-options')} asChild>
+        <Pressable accessibilityRole="button" className="min-h-11 items-center justify-center self-start rounded-xl border border-border bg-white px-4 py-3 active:opacity-80">
+          <Text className="text-sm font-bold text-ink">Configure QA finding categories and severities</Text>
+        </Pressable>
+      </Link>
+      <Link href={routeHref('/admin/certificates')} asChild>
+        <Pressable accessibilityRole="button" className="min-h-11 items-center justify-center self-start rounded-xl border border-border bg-white px-4 py-3 active:opacity-80">
+          <Text className="text-sm font-bold text-ink">Certificate authorization</Text>
         </Pressable>
       </Link>
       <ConfirmDialog
@@ -167,13 +183,33 @@ function AdminAssignments() {
       ) : null}
       {!loading && !error ? (
         <View className="flex-row flex-wrap gap-3">
-          <DashboardMetric label="Available assessors" value={assessors.length} />
-          <DashboardMetric label="Active programmes" value={programmes.length} />
-          <DashboardMetric
+          <SummaryCard
+            label="Available assessors"
+            value={assessors.length}
+            detail="Ready for programme assignment"
+            symbol={{ ios: 'person.2.fill', android: 'groups', web: 'groups' }}
+            tone="forest"
+          />
+          <SummaryCard
+            label="Active programmes"
+            value={programmes.length}
+            detail="Available across providers"
+            symbol={{ ios: 'square.grid.2x2.fill', android: 'grid_view', web: 'grid_view' }}
+          />
+          <SummaryCard
             label="Active assignments"
             value={assignments.filter((assignment) => assignment.status === 'ACTIVE').length}
+            detail="Current assessor access"
+            symbol={{ ios: 'checkmark.circle.fill', android: 'task_alt', web: 'task_alt' }}
+            tone="plain"
           />
-          <DashboardMetric label="Unassigned programmes" value={unassignedProgrammeCount} />
+          <SummaryCard
+            label="Unassigned programmes"
+            value={unassignedProgrammeCount}
+            detail="Awaiting assessor access"
+            symbol={{ ios: 'exclamationmark.circle.fill', android: 'error_outline', web: 'error_outline' }}
+            tone={unassignedProgrammeCount ? 'amber' : 'sage'}
+          />
         </View>
       ) : null}
       {!loading && !error && assessors.length === 0 ? (
@@ -289,14 +325,5 @@ function AdminAssignments() {
       ) : null}
       {success ? <Text className="text-sm font-bold text-primary" accessibilityRole="alert">{success}</Text> : null}
     </Page>
-  );
-}
-
-function DashboardMetric({ label, value }: { label: string; value: number }) {
-  return (
-    <View className="min-w-[140px] flex-1 gap-1 rounded-2xl border border-border bg-white p-4 shadow-sm shadow-black/5">
-      <Text className="text-3xl font-extrabold text-ink">{value}</Text>
-      <Text className="text-sm text-muted">{label}</Text>
-    </View>
   );
 }

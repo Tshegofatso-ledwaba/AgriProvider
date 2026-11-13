@@ -1,4 +1,4 @@
-const { randomUUID } = require('node:crypto');
+const { createHash, randomUUID } = require('node:crypto');
 const bcrypt = require('bcryptjs');
 const { Router } = require('express');
 const { rateLimit } = require('express-rate-limit');
@@ -64,6 +64,20 @@ function createAuthRouter({ database, jwtSecret, secureCookies }) {
     legacyHeaders: false,
     message: { error: 'Too many authentication attempts. Try again later.' },
   });
+  const registrationLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many registration attempts. Try again later.' },
+  });
+  const learnerActivationLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many learner setup attempts. Try again later.' },
+  });
   const requireAuthentication = authenticate(database, jwtSecret);
   const dummyPasswordHash = bcrypt.hashSync(randomUUID(), passwordRounds);
 
@@ -91,7 +105,7 @@ function createAuthRouter({ database, jwtSecret, secureCookies }) {
     }
   }
 
-  router.post('/register', loginLimiter, async (request, response, next) => {
+  router.post('/register', registrationLimiter, async (request, response, next) => {
     const body = request.body ?? {};
     const fullName = typeof body.fullName === 'string' ? body.fullName.trim() : '';
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
@@ -154,6 +168,104 @@ function createAuthRouter({ database, jwtSecret, secureCookies }) {
       return sendAuthenticationResult(request, response, 200, row, publicUser(row));
     } catch (error) {
       return next(error);
+    }
+  });
+
+  router.post('/learner-activation', learnerActivationLimiter, async (request, response, next) => {
+    const body = request.body ?? {};
+    if (typeof body.token !== 'string' || !/^[0-9a-f]{64}$/i.test(body.token)
+      || !validPassword(body.password)) {
+      return response.status(400).json({
+        error: 'Provide a valid learner setup code and a password between 12 and 72 UTF-8 bytes.',
+      });
+    }
+
+    const tokenHash = createHash('sha256').update(body.token).digest('hex');
+    let client;
+    let transactionOpen = false;
+    try {
+      client = await database.connect();
+      await client.query('BEGIN');
+      transactionOpen = true;
+      const { rows: invitationRows } = await client.query(
+        `SELECT i.id, i.learner_id, l.email, l.full_name, l.learner_user_id
+         FROM learner_account_invitations i
+         JOIN learners l ON l.id = i.learner_id
+         WHERE i.token_hash = $1
+           AND i.consumed_at IS NULL
+           AND i.revoked_at IS NULL
+           AND i.expires_at > NOW()
+           AND l.archived_at IS NULL
+         FOR UPDATE OF i, l`,
+        [tokenHash],
+      );
+      const invitation = invitationRows[0];
+      if (!invitation) {
+        await client.query('ROLLBACK');
+        transactionOpen = false;
+        return response.status(400).json({ error: 'This learner setup code is invalid or expired.' });
+      }
+      if (invitation.learner_user_id) {
+        await client.query('ROLLBACK');
+        transactionOpen = false;
+        return response.status(409).json({ error: 'This learner profile already has an account.' });
+      }
+
+      const { rows: existingUsers } = await client.query(
+        `SELECT id
+         FROM users
+         WHERE lower(email) = lower($1)
+         FOR UPDATE`,
+        [invitation.email],
+      );
+      if (existingUsers[0]) {
+        await client.query('ROLLBACK');
+        transactionOpen = false;
+        return response.status(409).json({ error: 'An account already uses this learner email. Contact the provider.' });
+      }
+
+      const passwordHash = await bcrypt.hash(body.password, passwordRounds);
+      const { rows: userRows } = await client.query(
+        `INSERT INTO users (id, email, full_name, password_hash, role)
+         VALUES ($1, $2, $3, $4, 'learner')
+         RETURNING id, email, full_name, role`,
+        [randomUUID(), invitation.email.trim().toLowerCase(), invitation.full_name, passwordHash],
+      );
+      const user = userRows[0];
+      const { rowCount: linkCount } = await client.query(
+        `UPDATE learners
+         SET learner_user_id = $1, updated_at = NOW()
+         WHERE id = $2 AND learner_user_id IS NULL AND archived_at IS NULL`,
+        [user.id, invitation.learner_id],
+      );
+      if (linkCount !== 1) {
+        await client.query('ROLLBACK');
+        transactionOpen = false;
+        return response.status(409).json({ error: 'This learner profile can no longer be activated.' });
+      }
+      const { rowCount: consumeCount } = await client.query(
+        `UPDATE learner_account_invitations
+         SET consumed_at = NOW()
+         WHERE id = $1 AND consumed_at IS NULL AND revoked_at IS NULL`,
+        [invitation.id],
+      );
+      if (consumeCount !== 1) {
+        await client.query('ROLLBACK');
+        transactionOpen = false;
+        return response.status(409).json({ error: 'This learner setup code has already been used.' });
+      }
+
+      await client.query('COMMIT');
+      transactionOpen = false;
+      return response.status(201).json({ user: publicUser(user) });
+    } catch (error) {
+      if (transactionOpen) await client.query('ROLLBACK');
+      if (error.code === '23505') {
+        return response.status(409).json({ error: 'An account already uses this learner email. Contact the provider.' });
+      }
+      return next(error);
+    } finally {
+      client?.release();
     }
   });
 

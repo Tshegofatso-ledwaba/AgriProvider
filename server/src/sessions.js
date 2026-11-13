@@ -5,7 +5,7 @@ const { authenticate, requireRole } = require('./middleware/authenticate');
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const datePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/i;
 const attendanceStatuses = new Set(['present', 'absent', 'excused']);
-const sessionColumns = 'id, programme_id, title, starts_at, created_by, updated_by, created_at, updated_at, archived_at';
+const sessionColumns = 'id, programme_id, title, starts_at, ends_at, venue, created_by, updated_by, created_at, updated_at, archived_at';
 const attendanceColumns = `a.id, a.session_id, a.enrolment_id, a.status, a.marked_by, a.created_at, a.updated_at,
   e.learner_id, l.learner_reference, l.full_name AS learner_name`;
 
@@ -19,7 +19,9 @@ function validateDate(value) {
 
 function validateSessionBody(body, { partial = false } = {}) {
   if (!isObject(body)) return { error: 'Request body must be a JSON object.' };
-  const allowedFields = partial ? ['title', 'startsAt'] : ['programmeId', 'title', 'startsAt'];
+  const allowedFields = partial
+    ? ['title', 'startsAt', 'endsAt', 'venue']
+    : ['programmeId', 'title', 'startsAt', 'endsAt', 'venue'];
   if (Object.keys(body).some((key) => !allowedFields.includes(key))) {
     return { error: `Only ${allowedFields.join(', ')} can be provided.` };
   }
@@ -44,6 +46,27 @@ function validateSessionBody(body, { partial = false } = {}) {
       return { error: 'Start time must be a valid ISO 8601 date and include a timezone.' };
     }
     value.startsAt = new Date(body.startsAt).toISOString();
+  }
+  if (Object.hasOwn(body, 'endsAt')) {
+    if (body.endsAt === null || body.endsAt === '') {
+      value.endsAt = null;
+    } else if (!validateDate(body.endsAt)) {
+      return { error: 'End time must be a valid ISO 8601 date and include a timezone.' };
+    } else {
+      value.endsAt = new Date(body.endsAt).toISOString();
+    }
+  }
+  if (value.startsAt && value.endsAt && value.endsAt <= value.startsAt) {
+    return { error: 'End time must be after the start time.' };
+  }
+  if (Object.hasOwn(body, 'venue')) {
+    if (body.venue === null || (typeof body.venue === 'string' && !body.venue.trim())) {
+      value.venue = null;
+    } else if (typeof body.venue !== 'string' || body.venue.trim().length > 160) {
+      return { error: 'Venue must be 160 characters or fewer.' };
+    } else {
+      value.venue = body.venue.trim();
+    }
   }
   return { value };
 }
@@ -90,7 +113,7 @@ function createSessionsRouter({ database, jwtSecret }) {
       const programmeFilter = programmeId ? 'AND s.programme_id = $2' : '';
       if (programmeId) values.push(programmeId);
       const { rows } = await database.query(
-        `SELECT s.id, s.programme_id, s.title, s.starts_at, s.created_at,
+        `SELECT s.id, s.programme_id, s.title, s.starts_at, s.ends_at, s.venue, s.created_at,
            p.name AS programme_name,
            COUNT(DISTINCT e.id)::integer AS enrolled_count,
            COUNT(DISTINCT a.id)::integer AS marked_count
@@ -117,9 +140,9 @@ function createSessionsRouter({ database, jwtSecret }) {
     try {
       const { rows } = await database.query(
         `INSERT INTO training_sessions (
-           id, provider_user_id, programme_id, title, starts_at, created_by, updated_by
+           id, provider_user_id, programme_id, title, starts_at, ends_at, venue, created_by, updated_by
          )
-         SELECT $1, p.provider_user_id, p.id, $4, $5, $2, $2
+         SELECT $1, p.provider_user_id, p.id, $4, $5, $6, $7, $2, $2
          FROM programmes p
          WHERE p.id = $3 AND p.provider_user_id = $2 AND p.archived_at IS NULL
          RETURNING ${sessionColumns}`,
@@ -129,11 +152,14 @@ function createSessionsRouter({ database, jwtSecret }) {
           validated.value.programmeId,
           validated.value.title,
           validated.value.startsAt,
+          validated.value.endsAt ?? null,
+          validated.value.venue ?? null,
         ],
       );
       if (!rows[0]) return response.status(404).json({ error: 'Active programme not found.' });
       return response.status(201).json({ session: rows[0] });
     } catch (error) {
+      if (error.code === '23514') return response.status(400).json({ error: 'End time must be after the start time.' });
       return next(error);
     }
   });
@@ -230,7 +256,7 @@ function createSessionsRouter({ database, jwtSecret }) {
     if (!uuidPattern.test(request.params.id)) return response.status(400).json({ error: 'Session ID must be a UUID.' });
     try {
       const { rows } = await database.query(
-        `SELECT s.id, s.programme_id, s.title, s.starts_at, s.created_by, s.updated_by,
+        `SELECT s.id, s.programme_id, s.title, s.starts_at, s.ends_at, s.venue, s.created_by, s.updated_by,
            s.created_at, s.updated_at, s.archived_at, p.name AS programme_name
          FROM training_sessions s
          JOIN programmes p ON p.id = s.programme_id AND p.provider_user_id = s.provider_user_id
@@ -250,7 +276,7 @@ function createSessionsRouter({ database, jwtSecret }) {
     if (validated.error) return response.status(400).json({ error: validated.error });
     const fields = Object.entries(validated.value);
     const assignments = fields.map(([field], index) => {
-      const column = field === 'startsAt' ? 'starts_at' : field === 'programmeId' ? 'programme_id' : field;
+      const column = { startsAt: 'starts_at', endsAt: 'ends_at', programmeId: 'programme_id' }[field] ?? field;
       return `${column} = $${index + 1}`;
     });
     const values = fields.map(([, value]) => value);
@@ -268,6 +294,7 @@ function createSessionsRouter({ database, jwtSecret }) {
       if (!rows[0]) return response.status(404).json({ error: 'Session or active programme not found.' });
       return response.json({ session: rows[0] });
     } catch (error) {
+      if (error.code === '23514') return response.status(400).json({ error: 'End time must be after the start time.' });
       return next(error);
     }
   });

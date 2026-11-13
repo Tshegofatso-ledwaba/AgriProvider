@@ -6,6 +6,15 @@ export type Learner = {
   full_name: string;
   phone: string | null;
   email: string | null;
+  learner_user_id: string | null;
+  account_status: 'active' | 'pending';
+  linked_account: {
+    id: string;
+    email: string;
+    full_name: string;
+    role: string;
+    is_active: boolean;
+  } | null;
   created_at: string;
   updated_at: string;
   status: 'active' | 'archived';
@@ -18,6 +27,16 @@ function isLearner(value: unknown): value is Learner {
     && typeof value.full_name === 'string'
     && (typeof value.phone === 'string' || value.phone === null)
     && (typeof value.email === 'string' || value.email === null)
+    && (typeof value.learner_user_id === 'string' || value.learner_user_id === null)
+    && (value.account_status === 'active' || value.account_status === 'pending')
+    && (value.linked_account === null || (
+      isRecord(value.linked_account)
+      && typeof value.linked_account.id === 'string'
+      && typeof value.linked_account.email === 'string'
+      && typeof value.linked_account.full_name === 'string'
+      && typeof value.linked_account.role === 'string'
+      && typeof value.linked_account.is_active === 'boolean'
+    ))
     && typeof value.created_at === 'string'
     && typeof value.updated_at === 'string'
     && (value.status === 'active' || value.status === 'archived');
@@ -78,6 +97,26 @@ export async function updateLearner(
     throw new Error('The API returned an unexpected learner.');
   }
   return payload.learner;
+}
+
+export async function activateLearnerAccount(
+  token: string,
+  id: string,
+): Promise<{ learner: Learner; invitationToken?: string; invitationExpiresAt?: string }> {
+  const payload = await requestApi(`/api/learners/${encodeURIComponent(id)}/activate-account`, {
+    method: 'POST',
+    token,
+  });
+  if (!isRecord(payload) || !isLearner(payload.learner)
+    || (payload.invitationToken !== undefined && typeof payload.invitationToken !== 'string')
+    || (payload.invitationExpiresAt !== undefined && typeof payload.invitationExpiresAt !== 'string')) {
+    throw new Error('The API returned an unexpected learner activation response.');
+  }
+  return {
+    learner: payload.learner,
+    invitationToken: payload.invitationToken as string | undefined,
+    invitationExpiresAt: payload.invitationExpiresAt as string | undefined,
+  };
 }
 
 export async function archiveLearner(token: string, id: string): Promise<void> {

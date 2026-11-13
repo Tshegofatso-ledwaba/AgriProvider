@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { randomUUID } = require('node:crypto');
+const { createHash, randomUUID } = require('node:crypto');
 const { once } = require('node:events');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -28,6 +28,7 @@ const webOrigin = 'http://localhost:8081';
 const users = [];
 const programmes = [];
 const learners = [];
+const learnerInvitations = [];
 const enrolments = [];
 const trainingSessions = [];
 const attendanceRecords = [];
@@ -103,6 +104,108 @@ const database = {
     if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK'
       || sql.includes('pg_advisory_xact_lock')) {
       return { rows: [], rowCount: 0 };
+    }
+
+    if (sql.includes('WITH programme_scope AS')) {
+      if (!programmesAvailable) throw new Error('Programme database unavailable');
+      const [programmeId, providerUserId] = values;
+      const programme = programmes.find((item) => item.id === programmeId
+        && item.provider_user_id === providerUserId && item.archived_at === null);
+      if (!programme) return { rows: [], rowCount: 0 };
+      const programmeEnrolments = enrolments.filter((item) => item.programme_id === programmeId
+        && item.provider_user_id === providerUserId);
+      const activeEnrolments = programmeEnrolments.filter((item) => item.status === 'active');
+      const programmeSessions = trainingSessions.filter((item) => item.programme_id === programmeId
+        && item.provider_user_id === providerUserId && item.archived_at === null);
+      const sessionIds = new Set(trainingSessions.filter((item) => item.programme_id === programmeId
+        && item.provider_user_id === providerUserId).map((item) => item.id));
+      const programmeAttendance = attendanceRecords.filter((item) => item.programme_id === programmeId
+        && item.provider_user_id === providerUserId && sessionIds.has(item.session_id));
+      const requirements = evidenceRequirements.filter((item) => item.programme_id === programmeId
+        && item.provider_user_id === providerUserId && item.archived_at === null);
+      const latestByPair = new Map();
+      for (const submission of evidenceSubmissions.filter((item) => item.programme_id === programmeId
+        && item.provider_user_id === providerUserId
+        && activeEnrolments.some((enrolment) => enrolment.id === item.enrolment_id))) {
+        const key = `${submission.enrolment_id}:${submission.requirement_id}`;
+        if (!latestByPair.has(key) || latestByPair.get(key).version < submission.version) {
+          latestByPair.set(key, submission);
+        }
+      }
+      const slots = activeEnrolments.flatMap((enrolment) => requirements.map((requirement) => (
+        latestByPair.get(`${enrolment.id}:${requirement.id}`)?.status ?? null
+      )));
+      const count = (predicate) => slots.filter(predicate).length;
+      return {
+        rows: [{
+          programme_id: programmeId,
+          active_enrolments: activeEnrolments.length,
+          withdrawn_enrolments: programmeEnrolments.filter((item) => item.status === 'withdrawn').length,
+          active_sessions: programmeSessions.length,
+          attendance_recorded: programmeAttendance.length,
+          attendance_present: programmeAttendance.filter((item) => item.status === 'present').length,
+          attendance_absent: programmeAttendance.filter((item) => item.status === 'absent').length,
+          attendance_excused: programmeAttendance.filter((item) => item.status === 'excused').length,
+          evidence_requirements: requirements.length,
+          evidence_slots: slots.length,
+          evidence_not_submitted: count((status) => status === null),
+          evidence_submitted: count((status) => status === 'SUBMITTED'),
+          evidence_awaiting_review: count((status) => status === 'UNDER_REVIEW'),
+          evidence_approved: count((status) => status === 'APPROVED'),
+          evidence_correction_required: count((status) => status === 'CORRECTION_REQUIRED'),
+        }],
+        rowCount: 1,
+      };
+    }
+
+    if (sql.includes('learner_account_invitations')) {
+      if (sql.includes('SELECT i.id')) {
+        const invitation = learnerInvitations.find((item) => item.token_hash === values[0]
+          && item.consumed_at === null && item.revoked_at === null
+          && new Date(item.expires_at) > new Date());
+        const learner = invitation && learners.find((item) => item.id === invitation.learner_id
+          && item.archived_at === null);
+        return {
+          rows: invitation && learner ? [{
+            id: invitation.id,
+            learner_id: learner.id,
+            email: learner.email,
+            full_name: learner.full_name,
+            learner_user_id: learner.learner_user_id ?? null,
+          }] : [],
+          rowCount: invitation && learner ? 1 : 0,
+        };
+      }
+      if (sql.includes('SET revoked_at = NOW()')) {
+        const [learnerId] = values;
+        for (const invitation of learnerInvitations.filter((item) => item.learner_id === learnerId
+          && item.consumed_at === null && item.revoked_at === null)) {
+          invitation.revoked_at = new Date().toISOString();
+        }
+        return { rows: [], rowCount: 0 };
+      }
+      if (sql.includes('INSERT INTO learner_account_invitations')) {
+        const [id, learnerId, providerUserId, tokenHash] = values;
+        const invitation = {
+          id,
+          learner_id: learnerId,
+          provider_user_id: providerUserId,
+          token_hash: tokenHash,
+          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          consumed_at: null,
+          revoked_at: null,
+        };
+        learnerInvitations.push(invitation);
+        return { rows: [{ expires_at: invitation.expires_at }], rowCount: 1 };
+      }
+      if (sql.includes('SET consumed_at = NOW()')) {
+        const [id] = values;
+        const invitation = learnerInvitations.find((item) => item.id === id
+          && item.consumed_at === null && item.revoked_at === null);
+        if (!invitation) return { rows: [], rowCount: 0 };
+        invitation.consumed_at = new Date().toISOString();
+        return { rows: [], rowCount: 1 };
+      }
     }
 
     if (sql.includes('FROM learners l')
@@ -181,6 +284,40 @@ const database = {
         })
         .sort((left, right) => right.starts_at.localeCompare(left.starts_at))
         .slice(0, 10);
+      return { rows, rowCount: rows.length };
+    }
+
+    if (sql.includes('a.status AS attendance_status')
+      && sql.includes('FROM enrolments e')
+      && sql.includes('JOIN training_sessions s')) {
+      if (!sessionsAvailable) throw new Error('Attendance database unavailable');
+      const [learnerId, from, to] = values;
+      const start = Date.parse(from);
+      const end = Date.parse(to);
+      const learnerEnrolments = enrolments.filter((item) => item.learner_id === learnerId
+        && (item.status === 'active' || attendanceRecords.some((record) => record.enrolment_id === item.id)));
+      const rows = trainingSessions
+        .filter((session) => session.archived_at === null
+          && Date.parse(session.starts_at) >= start
+          && Date.parse(session.starts_at) < end
+          && learnerEnrolments.some((item) => item.programme_id === session.programme_id))
+        .map((session) => {
+          const enrolment = learnerEnrolments.find((item) => item.programme_id === session.programme_id);
+          const programme = programmes.find((item) => item.id === session.programme_id);
+          const attendance = attendanceRecords.find((item) => item.session_id === session.id
+            && item.enrolment_id === enrolment?.id);
+          return {
+            id: session.id,
+            programme_id: session.programme_id,
+            programme_name: programme.name,
+            title: session.title,
+            starts_at: session.starts_at,
+            ends_at: session.ends_at ?? null,
+            venue: session.venue ?? null,
+            attendance_status: attendance?.status ?? null,
+          };
+        })
+        .sort((left, right) => left.starts_at.localeCompare(right.starts_at));
       return { rows, rowCount: rows.length };
     }
 
@@ -991,6 +1128,32 @@ const database = {
         throw new Error('Learner database unavailable');
       }
 
+      if (sql.includes('SELECT id, provider_user_id, full_name, email, learner_user_id')) {
+        const [learnerId, providerUserId] = values;
+        const learner = learners.find((item) => item.id === learnerId
+          && item.provider_user_id === providerUserId
+          && item.archived_at === null);
+        return { rows: learner ? [{ ...learner, learner_user_id: learner.learner_user_id ?? null }] : [], rowCount: learner ? 1 : 0 };
+      }
+
+      if (sql.includes('SELECT id FROM learners WHERE learner_user_id = $1')) {
+        const [learnerUserId, learnerId] = values;
+        const linked = learners.find((item) => item.learner_user_id === learnerUserId
+          && item.id !== learnerId && item.archived_at === null);
+        return { rows: linked ? [{ id: linked.id }] : [], rowCount: linked ? 1 : 0 };
+      }
+
+      if (sql.includes('SET learner_user_id = $1, updated_at = NOW()')) {
+        const [learnerUserId, learnerId, providerUserId] = values;
+        const learner = learners.find((item) => item.id === learnerId
+          && (!providerUserId || item.provider_user_id === providerUserId)
+          && item.archived_at === null && !item.learner_user_id);
+        if (!learner) return { rows: [], rowCount: 0 };
+        learner.learner_user_id = learnerUserId;
+        learner.updated_at = new Date().toISOString();
+        return { rows: [{ ...learner }], rowCount: 1 };
+      }
+
       if (sql.includes('SELECT EXISTS')) {
         const [providerUserId, fullName, email, phone, learnerId] = values;
         const duplicate = learners.some((item) => item.provider_user_id === providerUserId
@@ -1249,16 +1412,30 @@ const database = {
         throw Object.assign(new Error('Duplicate email'), { code: '23505' });
       }
 
+      const role = sql.includes("'learner'") ? 'learner' : 'provider';
+
       const user = {
         id: values[0],
         email: values[1],
         full_name: values[2],
         password_hash: values[3],
-        role: 'provider',
+        role,
         is_active: true,
       };
       users.push(user);
       return { rows: [user], rowCount: 1 };
+    }
+
+    if (sql.includes('lower(email) = lower($1)') && sql.includes('FROM users')) {
+      const [email] = values;
+      const user = users.find((item) => item.email?.toLowerCase() === String(email).toLowerCase() && item.is_active);
+      return { rows: user ? [{
+        id: user.id,
+        email: user.email,
+        full_name: user.full_name,
+        role: user.role,
+        is_active: user.is_active,
+      }] : [], rowCount: user ? 1 : 0 };
     }
 
     if (sql.includes('WHERE email = $1')) {
@@ -1271,6 +1448,35 @@ const database = {
       }
       const user = users.find((item) => item.email === values[0] && item.is_active);
       return { rows: user ? [user] : [], rowCount: user ? 1 : 0 };
+    }
+
+    if (sql.includes('SELECT id, provider_user_id, full_name, email, learner_user_id')
+      && sql.includes('FROM learners')
+      && sql.includes('WHERE id = $1 AND provider_user_id = $2')) {
+      if (!learnersAvailable) throw new Error('Learner database unavailable');
+      const [learnerId, providerUserId] = values;
+      const learner = learners.find((item) => item.id === learnerId && item.provider_user_id === providerUserId);
+      return { rows: learner ? [{ ...learner, learner_user_id: learner.learner_user_id ?? null }] : [], rowCount: learner ? 1 : 0 };
+    }
+
+    if (sql.includes('SELECT id FROM learners WHERE learner_user_id = $1')) {
+      const [learnerUserId, learnerId] = values;
+      const linked = learners.find((item) => item.learner_user_id === learnerUserId && item.id !== learnerId && item.archived_at === null);
+      return { rows: linked ? [{ id: linked.id }] : [], rowCount: linked ? 1 : 0 };
+    }
+
+    if (sql.includes('UPDATE learners') && sql.includes('SET learner_user_id = $1, updated_at = NOW()')) {
+      const [learnerUserId, learnerId, providerUserId] = values;
+      const learner = learners.find((item) => item.id === learnerId && item.provider_user_id === providerUserId);
+      if (!learner) return { rows: [], rowCount: 0 };
+      learner.learner_user_id = learnerUserId;
+      learner.updated_at = new Date().toISOString();
+      return { rows: [{ ...learner, learner_user_id: learnerUserId }], rowCount: 1 };
+    }
+
+    // Learner timetable queries (covered against PostgreSQL in scheduling.integration.test.js).
+    if (sql.includes('AS attendance_status') || sql.includes('AS is_individual')) {
+      return { rows: [], rowCount: 0 };
     }
 
     if (sql.includes('WHERE id = $1')) {
@@ -1424,6 +1630,27 @@ test('health endpoint confirms the API and database are available', async () => 
 
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { status: 'ok', database: 'connected' });
+});
+
+test('expo and localhost web origins are accepted for browser-to-API requests', async () => {
+  for (const origin of [
+    'https://demo-1234567890.on.expo.app',
+    'http://localhost:8084',
+    'http://127.0.0.1:8084',
+  ]) {
+    const response = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: origin,
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'content-type,x-auth-mode',
+      },
+    });
+
+    assert.equal(response.status >= 200 && response.status < 300, true);
+    assert.equal(response.headers.get('access-control-allow-origin'), origin);
+    assert.equal(response.headers.get('access-control-allow-credentials'), 'true');
+  }
 });
 
 test('password validation enforces bcrypt byte limits', () => {
@@ -1914,6 +2141,99 @@ test('programme endpoints reject invalid bodies and UUIDs', async () => {
 
   const invalidId = await requestProgramme('/not-a-uuid');
   assert.equal(invalidId.status, 400);
+});
+
+test('programme progress reports current activity counts without inferring completion', async () => {
+  const programmeId = randomUUID();
+  const activeEnrolmentOne = randomUUID();
+  const activeEnrolmentTwo = randomUUID();
+  const withdrawnEnrolment = randomUUID();
+  const sessionId = randomUUID();
+  const archivedSessionId = randomUUID();
+  const requirementOne = randomUUID();
+  const requirementTwo = randomUUID();
+  const now = new Date().toISOString();
+
+  programmes.push({
+    id: programmeId,
+    provider_user_id: registeredUser.id,
+    name: 'Progress summary programme',
+    description: null,
+    created_at: now,
+    updated_at: now,
+    archived_at: null,
+  });
+  enrolments.push(
+    { id: activeEnrolmentOne, provider_user_id: registeredUser.id, programme_id: programmeId, status: 'active' },
+    { id: activeEnrolmentTwo, provider_user_id: registeredUser.id, programme_id: programmeId, status: 'active' },
+    { id: withdrawnEnrolment, provider_user_id: registeredUser.id, programme_id: programmeId, status: 'withdrawn' },
+  );
+  trainingSessions.push(
+    { id: sessionId, provider_user_id: registeredUser.id, programme_id: programmeId, archived_at: null },
+    { id: archivedSessionId, provider_user_id: registeredUser.id, programme_id: programmeId, archived_at: now },
+  );
+  attendanceRecords.push(
+    { id: randomUUID(), provider_user_id: registeredUser.id, programme_id: programmeId, session_id: sessionId, status: 'present' },
+    { id: randomUUID(), provider_user_id: registeredUser.id, programme_id: programmeId, session_id: archivedSessionId, status: 'excused' },
+  );
+  evidenceRequirements.push(
+    { id: requirementOne, provider_user_id: registeredUser.id, programme_id: programmeId, archived_at: null, created_at: now },
+    { id: requirementTwo, provider_user_id: registeredUser.id, programme_id: programmeId, archived_at: null, created_at: now },
+  );
+  evidenceSubmissions.push(
+    { id: randomUUID(), provider_user_id: registeredUser.id, programme_id: programmeId, enrolment_id: activeEnrolmentOne, requirement_id: requirementOne, version: 1, status: 'APPROVED' },
+    { id: randomUUID(), provider_user_id: registeredUser.id, programme_id: programmeId, enrolment_id: activeEnrolmentOne, requirement_id: requirementOne, version: 2, status: 'CORRECTION_REQUIRED' },
+    { id: randomUUID(), provider_user_id: registeredUser.id, programme_id: programmeId, enrolment_id: activeEnrolmentOne, requirement_id: requirementTwo, version: 1, status: 'SUBMITTED' },
+    { id: randomUUID(), provider_user_id: registeredUser.id, programme_id: programmeId, enrolment_id: activeEnrolmentTwo, requirement_id: requirementOne, version: 1, status: 'UNDER_REVIEW' },
+    { id: randomUUID(), provider_user_id: registeredUser.id, programme_id: programmeId, enrolment_id: withdrawnEnrolment, requirement_id: requirementTwo, version: 1, status: 'APPROVED' },
+  );
+
+  const response = await requestProgramme(`/${programmeId}/progress`);
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).progress, {
+    programme_id: programmeId,
+    active_enrolments: 2,
+    withdrawn_enrolments: 1,
+    active_sessions: 1,
+    attendance_recorded: 2,
+    attendance_present: 1,
+    attendance_absent: 0,
+    attendance_excused: 1,
+    evidence_requirements: 2,
+    evidence_slots: 4,
+    evidence_not_submitted: 1,
+    evidence_submitted: 1,
+    evidence_awaiting_review: 1,
+    evidence_approved: 0,
+    evidence_correction_required: 1,
+  });
+
+  const otherProvider = await requestProgramme(`/${programmeId}/progress`, {
+    token: tokenFor(providerBId, 'provider'),
+  });
+  assert.equal(otherProvider.status, 404);
+  const invalidId = await requestProgramme('/not-a-uuid/progress');
+  assert.equal(invalidId.status, 400);
+  const unauthenticated = await requestProgramme(`/${programmeId}/progress`, { token: null });
+  assert.equal(unauthenticated.status, 401);
+
+  const emptyProgrammeId = randomUUID();
+  programmes.push({
+    id: emptyProgrammeId,
+    provider_user_id: registeredUser.id,
+    name: 'Empty progress programme',
+    description: null,
+    created_at: now,
+    updated_at: now,
+    archived_at: null,
+  });
+  const empty = await requestProgramme(`/${emptyProgrammeId}/progress`);
+  assert.equal(empty.status, 200);
+  const emptyProgress = (await empty.json()).progress;
+  assert.equal(emptyProgress.active_enrolments, 0);
+  assert.equal(emptyProgress.active_sessions, 0);
+  assert.equal(emptyProgress.evidence_slots, 0);
+  assert.equal(emptyProgress.evidence_not_submitted, 0);
 });
 
 test('programme endpoints require authentication', async () => {
@@ -2796,6 +3116,104 @@ test('learner APIs reject invalid input, query parameters, and client-supplied o
   assert.equal(invalidLimit.status, 400);
 });
 
+test('provider can create and activate a learner sign-in account from the linked learner profile', async () => {
+  const created = await requestLearner('/', {
+    method: 'POST',
+    body: { fullName: 'Invited Learner', email: 'invited@example.com' },
+  });
+  const { learner } = await created.json();
+  assert.equal(created.status, 201);
+
+  const activated = await requestLearner(`/${learner.id}/activate-account`, { method: 'POST' });
+  assert.equal(activated.status, 200, await activated.clone().text());
+  const payload = await activated.json();
+  assert.equal(payload.learner.id, learner.id);
+  assert.equal(payload.learner.account_status, 'pending');
+  assert.equal(payload.learner.linked_account, null);
+  assert.match(payload.invitationToken, /^[0-9a-f]{64}$/);
+  assert.ok(Date.parse(payload.invitationExpiresAt) > Date.now());
+  assert.equal(learnerInvitations.some((item) => item.token_hash === payload.invitationToken), false);
+
+  const renewed = await requestLearner(`/${learner.id}/activate-account`, { method: 'POST' });
+  assert.equal(renewed.status, 200);
+  const renewedPayload = await renewed.json();
+  assert.notEqual(renewedPayload.invitationToken, payload.invitationToken);
+
+  const revokedSetup = await fetch(`${baseUrl}/api/auth/learner-activation`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token: payload.invitationToken, password: learnerPassword }),
+  });
+  assert.equal(revokedSetup.status, 400);
+
+  const invalidPassword = await fetch(`${baseUrl}/api/auth/learner-activation`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token: renewedPayload.invitationToken, password: 'short' }),
+  });
+  assert.equal(invalidPassword.status, 400);
+
+  const renewedInvitation = learnerInvitations.find((item) => item.token_hash === createHash('sha256')
+    .update(renewedPayload.invitationToken).digest('hex'));
+  renewedInvitation.expires_at = new Date(Date.now() - 1000).toISOString();
+  const expiredSetup = await fetch(`${baseUrl}/api/auth/learner-activation`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token: renewedPayload.invitationToken, password: learnerPassword }),
+  });
+  assert.equal(expiredSetup.status, 400);
+
+  const refreshed = await requestLearner(`/${learner.id}/activate-account`, { method: 'POST' });
+  assert.equal(refreshed.status, 200);
+  const refreshedPayload = await refreshed.json();
+
+  const setup = await fetch(`${baseUrl}/api/auth/learner-activation`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token: refreshedPayload.invitationToken, password: learnerPassword }),
+  });
+  assert.equal(setup.status, 201, await setup.clone().text());
+  const setupBody = await setup.json();
+  assert.equal(setupBody.user.email, 'invited@example.com');
+  assert.equal(setupBody.user.role, 'learner');
+
+  const learnerLogin = await fetch(`${baseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      email: 'invited@example.com',
+      password: learnerPassword,
+      accountType: 'learner',
+    }),
+  });
+  assert.equal(learnerLogin.status, 200);
+  const loginBody = await learnerLogin.json();
+  assert.equal(loginBody.user.id, setupBody.user.id);
+  const learnerDashboard = await requestLearnerPortal('/dashboard', { token: loginBody.accessToken });
+  assert.equal(learnerDashboard.status, 200);
+  assert.equal((await learnerDashboard.json()).learner.id, learner.id);
+
+  const replay = await fetch(`${baseUrl}/api/auth/learner-activation`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token: refreshedPayload.invitationToken, password: learnerPassword }),
+  });
+  assert.equal(replay.status, 400);
+});
+
+test('learner account invitation migration stores expiring hashed codes and one open code per profile', async () => {
+  const migration = await fs.readFile(
+    require.resolve('../migrations/202611110001_create_learner_account_invitations.sql'),
+    'utf8',
+  );
+  assert.match(migration, /token_hash TEXT NOT NULL UNIQUE/);
+  assert.match(migration, /expires_at TIMESTAMPTZ NOT NULL/);
+  assert.match(migration, /consumed_at TIMESTAMPTZ/);
+  assert.match(migration, /revoked_at TIMESTAMPTZ/);
+  assert.match(migration, /ON DELETE CASCADE/);
+  assert.match(migration, /WHERE consumed_at IS NULL AND revoked_at IS NULL/);
+});
+
 test('learner registration warns about likely duplicates and requires an explicit confirmation to continue', async () => {
   const first = await requestLearner('/', {
     method: 'POST',
@@ -3231,6 +3649,21 @@ test('learner dashboard returns only linked programme, attendance, and evidence 
   assert.equal(body.evidence[0].submissions[0].filename, 'learner-evidence.pdf');
   assert.equal(body.evidenceSummary.awaitingAssessment, 1);
   assert.ok(body.recentActivity.some((item) => item.description === 'Evidence submitted'));
+
+  const rangeStart = new Date();
+  rangeStart.setUTCDate(1);
+  rangeStart.setUTCHours(0, 0, 0, 0);
+  const rangeEnd = new Date(Date.UTC(rangeStart.getUTCFullYear(), rangeStart.getUTCMonth() + 1, 1));
+  const calendarQuery = new URLSearchParams({ from: rangeStart.toISOString(), to: rangeEnd.toISOString() });
+  const calendarResponse = await requestLearnerPortal(`/calendar?${calendarQuery}`);
+  const calendarBody = await calendarResponse.json();
+  assert.equal(calendarResponse.status, 200);
+  assert.equal(calendarBody.sessions.length, 1);
+  assert.equal(calendarBody.sessions[0].id, session.id);
+  assert.equal(calendarBody.sessions[0].attendance_status, 'present');
+  assert.deepEqual(calendarBody.assessments, []);
+  const invalidCalendarRange = await requestLearnerPortal('/calendar?from=invalid&to=invalid');
+  assert.equal(invalidCalendarRange.status, 400);
 
   const unrelatedProgramme = await requestLearnerPortal(`/programmes/${randomUUID()}`);
   assert.equal(unrelatedProgramme.status, 404);

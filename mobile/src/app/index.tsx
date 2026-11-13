@@ -5,11 +5,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AuthWorkspace from '@/components/auth-workspace';
 import {
+  DashboardHero,
   ErrorNotice,
+  getRoleHomeRoute,
   LoadingNotice,
   Page,
   PageTitle,
   routeHref,
+  SummaryCard,
 } from '@/components/programme-ui';
 import { useAuth } from '@/providers/auth-provider';
 import { apiErrorText } from '@/services/api';
@@ -31,19 +34,14 @@ export default function HomeScreen() {
   if (!user) {
     return <AuthWorkspace />;
   }
-  if (user.role === 'admin') {
-    return <Redirect href={routeHref('/admin')} />;
+  const roleHomeRoute = getRoleHomeRoute(user.role);
+  if (roleHomeRoute) {
+    return <Redirect href={routeHref(roleHomeRoute)} />;
   }
-  if (user.role === 'assessor') {
-    return <Redirect href={routeHref('/assessor')} />;
+  if (user.role === 'provider') {
+    return <ProviderDashboard name={user.fullName} />;
   }
-  if (user.role === 'qa') {
-    return <Redirect href={routeHref('/qa')} />;
-  }
-  if (user.role === 'learner') {
-    return <Redirect href={routeHref('/learner')} />;
-  }
-  return <ProviderDashboard name={user.fullName} />;
+  return <Redirect href={routeHref('/')} />;
 }
 
 function ProviderDashboard({ name }: { name: string }) {
@@ -88,15 +86,15 @@ function ProviderDashboard({ name }: { name: string }) {
 
   const firstName = name.trim().split(/\s+/)[0] || 'there';
   const currentDate = new Date();
+
   return (
     <Page>
-      <View className="rounded-[28px] bg-primary p-5 shadow-sm shadow-black/10">
-        <Text className="text-[10px] font-extrabold tracking-[0.2em] text-white/70">PROVIDER WORKSPACE</Text>
-        <Text className="mt-3 text-3xl font-extrabold text-white">Welcome, {firstName}</Text>
-        <Text className="mt-2 text-sm leading-5 text-white/80">
-          Manage your programmes, learner records, attendance and evidence.
-        </Text>
-      </View>
+      <DashboardHero
+        eyebrow="PROVIDER WORKSPACE"
+        title={`Welcome back, ${firstName}`}
+        subtitle="Manage programmes, learner records, attendance and evidence from one operational view."
+        symbol={{ ios: 'building.2.fill', android: 'domain', web: 'domain' }}
+      />
 
       <PageTitle
         title="Workspace overview"
@@ -111,9 +109,26 @@ function ProviderDashboard({ name }: { name: string }) {
         <View className="gap-3">
           <Text className="text-base font-bold text-ink">At a glance</Text>
           <View className="flex-row flex-wrap gap-3">
-            <StatCard label="Learners" value={String(learnerCount ?? 0)} accent="primary" />
-            <StatCard label="Programmes" value={String(programmeCount)} accent="neutral" />
-            <StatCard label="Active enrolments" value={String(enrolmentCount ?? 0)} accent="success" />
+            <SummaryCard
+              label="Learners"
+              value={learnerCount ?? 0}
+              detail="Provider records"
+              symbol={{ ios: 'person.2.fill', android: 'groups', web: 'groups' }}
+              tone="forest"
+            />
+            <SummaryCard
+              label="Programmes"
+              value={programmeCount}
+              detail="Training programmes"
+              symbol={{ ios: 'square.grid.2x2.fill', android: 'grid_view', web: 'grid_view' }}
+            />
+            <SummaryCard
+              label="Active enrolments"
+              value={enrolmentCount ?? 0}
+              detail="Current learner participation"
+              symbol={{ ios: 'checkmark.circle.fill', android: 'task_alt', web: 'task_alt' }}
+              tone="sage"
+            />
           </View>
         </View>
       ) : null}
@@ -122,7 +137,7 @@ function ProviderDashboard({ name }: { name: string }) {
         <View className="gap-3 rounded-[24px] border border-border bg-white p-4 shadow-sm shadow-black/5">
           <View className="gap-1">
             <Text className="text-base font-bold text-ink">Quick actions</Text>
-            <Text className="text-sm leading-5 text-muted">Go directly to common provider tasks.</Text>
+            <Text className="text-sm leading-5 text-muted">Start the next task in one tap.</Text>
           </View>
           <View className="flex-row flex-wrap gap-3">
             <QuickAction label="Add learner" href="/learners/new" tint="primary" />
@@ -130,6 +145,7 @@ function ProviderDashboard({ name }: { name: string }) {
             <QuickAction label="Enrol learner" href="/enrolments/new" tint="secondary" />
             <QuickAction label="Record attendance" href="/sessions" tint="neutral" />
             <QuickAction label="Evidence workspace" href="/enrolments" tint="neutral" />
+            <QuickAction label="QA corrective actions" href="/provider/qa-actions" tint="neutral" />
           </View>
         </View>
       ) : null}
@@ -137,47 +153,15 @@ function ProviderDashboard({ name }: { name: string }) {
       <View className="gap-3 rounded-[24px] border border-border bg-white p-4 shadow-sm shadow-black/5">
         <Text className="text-base font-bold text-ink">Evidence and review</Text>
         <Text className="text-sm leading-5 text-muted">
-          Evidence completeness and assessor feedback are tracked on each learner enrolment. Open the evidence workspace to review individual records.
+          Evidence completeness and assessor feedback stay linked to each learner enrolment. Review requirements from the workspace to keep progress moving.
         </Text>
         <Link href={routeHref('/explore')} asChild>
-          <Pressable accessibilityRole="button" className="rounded-xl border border-border bg-surface px-4 py-3">
-            <Text className="text-center text-sm font-bold text-ink">Your profile</Text>
+          <Pressable accessibilityRole="button" className="rounded-xl border border-border bg-surface px-4 py-3 active:opacity-80">
+            <Text className="text-center text-sm font-bold text-ink">Open your profile</Text>
           </Pressable>
         </Link>
       </View>
     </Page>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent: 'primary' | 'success' | 'neutral' | 'warning';
-}) {
-  const tint = accent === 'primary'
-    ? 'bg-primary/10'
-    : accent === 'success'
-      ? 'bg-emerald-50'
-      : accent === 'warning'
-        ? 'bg-[#F7E8BF]'
-        : 'bg-slate-100';
-  const text = accent === 'primary'
-    ? 'text-primary'
-    : accent === 'success'
-      ? 'text-emerald-700'
-      : accent === 'warning'
-        ? 'text-[#7A5A00]'
-        : 'text-slate-700';
-
-  return (
-    <View className={`min-w-[140px] flex-1 gap-2 rounded-2xl border border-border bg-white p-4 ${tint}`}>
-      <Text className="text-sm font-bold text-muted">{label}</Text>
-      <Text className={`text-3xl font-extrabold ${text}`}>{value}</Text>
-    </View>
   );
 }
 
@@ -199,7 +183,7 @@ function QuickAction({
 
   return (
     <Link href={routeHref(href)} asChild>
-      <Pressable accessibilityRole="button" className={`rounded-xl px-4 py-3 ${bg}`}>
+      <Pressable accessibilityRole="button" className={`min-w-[140px] flex-1 rounded-xl px-4 py-3 active:opacity-80 ${bg}`}>
         <Text className={`text-center text-sm font-bold ${text}`}>{label}</Text>
       </Pressable>
     </Link>
